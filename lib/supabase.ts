@@ -1,10 +1,19 @@
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Supabase環境変数の確認
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    "Supabase環境変数が設定されていません。.env.localファイルにNEXT_PUBLIC_SUPABASE_URLとNEXT_PUBLIC_SUPABASE_ANON_KEYを設定してください。",
+  )
+}
+
+// Supabaseクライアントの作成
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// データベース型定義
 export type Database = {
   public: {
     Tables: {

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Plus, Users, UserCheck, Tag } from "lucide-react"
+import { ArrowLeft, Plus, Users, UserCheck, Tag, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 
 interface Staff {
@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<User[]>([])
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // フォーム状態
   const [newStaff, setNewStaff] = useState({ name: "", email: "" })
@@ -57,6 +58,8 @@ export default function SettingsPage() {
 
   const fetchData = async () => {
     try {
+      setError(null)
+
       const [staffData, usersData, activityTypesData] = await Promise.all([
         supabase.from("staff").select("*").order("name"),
         supabase
@@ -69,9 +72,13 @@ export default function SettingsPage() {
         supabase.from("activity_types").select("*").order("name"),
       ])
 
+      if (staffData.error) throw staffData.error
+      if (usersData.error) throw usersData.error
+      if (activityTypesData.error) throw activityTypesData.error
+
       if (staffData.data) setStaff(staffData.data)
       if (usersData.data) {
-        const formattedUsers = usersData.data.map((user) => ({
+        const formattedUsers = usersData.data.map((user: any) => ({
           ...user,
           assigned_staff_name: user.staff?.name || null,
         }))
@@ -80,6 +87,7 @@ export default function SettingsPage() {
       if (activityTypesData.data) setActivityTypes(activityTypesData.data)
     } catch (error) {
       console.error("データの取得に失敗しました:", error)
+      setError("データの取得に失敗しました。Supabaseの設定を確認してください。")
     } finally {
       setLoading(false)
     }
@@ -180,6 +188,23 @@ export default function SettingsPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">設定を読み込んでいます...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <div className="space-x-4">
+            <Button onClick={fetchData}>再試行</Button>
+            <Link href="/">
+              <Button variant="outline">ダッシュボードに戻る</Button>
+            </Link>
+          </div>
         </div>
       </div>
     )

@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [selectedStaff, setSelectedStaff] = useState<string>("all")
   const [staff, setStaff] = useState<Array<{ id: string; name: string }>>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -39,15 +40,23 @@ export default function Dashboard() {
 
   const fetchData = async () => {
     try {
+      setError(null)
+
       // スタッフ一覧を取得
-      const { data: staffData } = await supabase.from("staff").select("id, name").eq("is_active", true).order("name")
+      const { data: staffData, error: staffError } = await supabase
+        .from("staff")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name")
+
+      if (staffError) throw staffError
 
       if (staffData) {
         setStaff(staffData)
       }
 
       // 利用者と最新活動日を取得
-      const { data: usersData } = await supabase
+      const { data: usersData, error: usersError } = await supabase
         .from("users")
         .select(`
           id,
@@ -60,16 +69,22 @@ export default function Dashboard() {
         .eq("is_active", true)
         .order("name")
 
+      if (usersError) throw usersError
+
       if (usersData) {
         // 各利用者の最新活動日を取得
         const usersWithActivity = await Promise.all(
           usersData.map(async (user) => {
-            const { data: lastActivity } = await supabase
+            const { data: lastActivity, error: activityError } = await supabase
               .from("activity_records")
               .select("activity_date")
               .eq("user_id", user.id)
               .order("activity_date", { ascending: false })
               .limit(1)
+
+            if (activityError) {
+              console.error(`利用者${user.name}の活動記録取得エラー:`, activityError)
+            }
 
             const lastActivityDate = lastActivity?.[0]?.activity_date || null
             const daysElapsed = lastActivityDate
@@ -93,6 +108,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("データの取得に失敗しました:", error)
+      setError("データの取得に失敗しました。Supabaseの設定を確認してください。")
     } finally {
       setLoading(false)
     }
@@ -138,6 +154,18 @@ export default function Dashboard() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">データを読み込んでいます...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={fetchData}>再試行</Button>
         </div>
       </div>
     )

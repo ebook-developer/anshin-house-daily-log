@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowLeft, Save } from "lucide-react"
+import { ArrowLeft, Save, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -38,6 +38,7 @@ export default function RecordPage() {
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     activity_date: new Date().toISOString().split("T")[0],
@@ -56,17 +57,24 @@ export default function RecordPage() {
 
   const fetchData = async () => {
     try {
+      setError(null)
+
       const [staffData, usersData, activityTypesData] = await Promise.all([
         supabase.from("staff").select("id, name").eq("is_active", true).order("name"),
         supabase.from("users").select("id, name").eq("is_active", true).order("name"),
         supabase.from("activity_types").select("id, name, color").eq("is_active", true).order("name"),
       ])
 
+      if (staffData.error) throw staffData.error
+      if (usersData.error) throw usersData.error
+      if (activityTypesData.error) throw activityTypesData.error
+
       if (staffData.data) setStaff(staffData.data)
       if (usersData.data) setUsers(usersData.data)
       if (activityTypesData.data) setActivityTypes(activityTypesData.data)
     } catch (error) {
       console.error("データの取得に失敗しました:", error)
+      setError("データの取得に失敗しました。Supabaseの設定を確認してください。")
     } finally {
       setLoading(false)
     }
@@ -103,6 +111,20 @@ export default function RecordPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">データを読み込んでいます...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <Link href="/">
+            <Button>ダッシュボードに戻る</Button>
+          </Link>
         </div>
       </div>
     )

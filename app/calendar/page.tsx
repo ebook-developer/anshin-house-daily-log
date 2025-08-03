@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, ChevronLeft, ChevronRight, Calendar } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight, Calendar, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 
 interface ActivityRecord {
@@ -21,6 +21,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [activities, setActivities] = useState<ActivityRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchActivities()
@@ -28,12 +29,14 @@ export default function CalendarPage() {
 
   const fetchActivities = async () => {
     try {
+      setError(null)
+
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth()
       const startDate = new Date(year, month, 1).toISOString().split("T")[0]
       const endDate = new Date(year, month + 1, 0).toISOString().split("T")[0]
 
-      const { data } = await supabase
+      const { data, error: fetchError } = await supabase
         .from("activity_records")
         .select(`
           id,
@@ -47,8 +50,10 @@ export default function CalendarPage() {
         .lte("activity_date", endDate)
         .order("activity_date")
 
+      if (fetchError) throw fetchError
+
       if (data) {
-        const formattedActivities = data.map((record) => ({
+        const formattedActivities = data.map((record: any) => ({
           id: record.id,
           activity_date: record.activity_date,
           content: record.content,
@@ -61,6 +66,7 @@ export default function CalendarPage() {
       }
     } catch (error) {
       console.error("活動記録の取得に失敗しました:", error)
+      setError("活動記録の取得に失敗しました。Supabaseの設定を確認してください。")
     } finally {
       setLoading(false)
     }
@@ -134,6 +140,23 @@ export default function CalendarPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">カレンダーを読み込んでいます...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <div className="space-x-4">
+            <Button onClick={fetchActivities}>再試行</Button>
+            <Link href="/">
+              <Button variant="outline">ダッシュボードに戻る</Button>
+            </Link>
+          </div>
         </div>
       </div>
     )

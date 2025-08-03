@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, User, Phone, MapPin, Calendar, Clock } from "lucide-react"
+import { ArrowLeft, User, Phone, MapPin, Calendar, Clock, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 
@@ -37,6 +37,7 @@ export default function UserDetailPage() {
   const [user, setUser] = useState<UserDetail | null>(null)
   const [activities, setActivities] = useState<ActivityRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (userId) {
@@ -46,8 +47,10 @@ export default function UserDetailPage() {
 
   const fetchUserData = async () => {
     try {
+      setError(null)
+
       // 利用者情報を取得
-      const { data: userData } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from("users")
         .select(`
           id,
@@ -62,6 +65,8 @@ export default function UserDetailPage() {
         .eq("id", userId)
         .single()
 
+      if (userError) throw userError
+
       if (userData) {
         setUser({
           ...userData,
@@ -70,7 +75,7 @@ export default function UserDetailPage() {
       }
 
       // 活動記録を取得
-      const { data: activitiesData } = await supabase
+      const { data: activitiesData, error: activitiesError } = await supabase
         .from("activity_records")
         .select(`
           id,
@@ -85,8 +90,10 @@ export default function UserDetailPage() {
         .eq("user_id", userId)
         .order("activity_date", { ascending: false })
 
+      if (activitiesError) throw activitiesError
+
       if (activitiesData) {
-        const formattedActivities = activitiesData.map((record) => ({
+        const formattedActivities = activitiesData.map((record: any) => ({
           id: record.id,
           activity_date: record.activity_date,
           content: record.content,
@@ -101,6 +108,7 @@ export default function UserDetailPage() {
       }
     } catch (error) {
       console.error("データの取得に失敗しました:", error)
+      setError("データの取得に失敗しました。Supabaseの設定を確認してください。")
     } finally {
       setLoading(false)
     }
@@ -121,6 +129,20 @@ export default function UserDetailPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">利用者情報を読み込んでいます...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <Link href="/">
+            <Button>ダッシュボードに戻る</Button>
+          </Link>
         </div>
       </div>
     )
