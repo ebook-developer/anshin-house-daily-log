@@ -58,6 +58,7 @@ export default function SettingsPage() {
 
   const fetchData = async () => {
     try {
+      setLoading(true);
       setError(null)
 
       const [staffData, usersData, activityTypesData] = await Promise.all([
@@ -94,21 +95,48 @@ export default function SettingsPage() {
   }
 
   const addStaff = async () => {
-    if (!newStaff.name.trim()) return
+    // 氏名が未入力、またはスペースのみの場合は処理を中断
+    if (!newStaff.name.trim()) {
+      alert("スタッフの氏名は必須です。");
+      return;
+    }
+
+    // Supabaseに送信するためのデータを準備・整形する
+    const staffDataToInsert = {
+      name: newStaff.name.trim(),
+      // emailが空文字、またはスペースのみの場合は null を、そうでなければその値を設定
+      email: newStaff.email && newStaff.email.trim() !== "" ? newStaff.email.trim() : null,
+    };
 
     try {
-      const { error } = await supabase.from("staff").insert([newStaff])
+      // 整形したデータをSupabaseに送信
+      const { data, error } = await supabase
+        .from("staff")
+        .insert([staffDataToInsert])
+        .select();
 
-      if (error) throw error
+      if (error) {
+        // Supabaseから返されたエラーをスローしてcatchブロックに渡す
+        throw error;
+      }
+      
+      // 成功した場合の処理
+      console.log("追加されたスタッフ:", data);
+      setNewStaff({ name: "", email: "" }); // フォームをリセット
+      fetchData(); // 一覧を再取得して画面を更新
+      alert("スタッフを追加しました");
 
-      setNewStaff({ name: "", email: "" })
-      fetchData()
-      alert("スタッフを追加しました")
-    } catch (error) {
-      console.error("スタッフの追加に失敗しました:", error)
-      alert("スタッフの追加に失敗しました")
+    } catch (error: any) {
+      // エラーハンドリングを強化
+      console.error("スタッフの追加に失敗しました:", error);
+
+      if (error.code === "23505") { // 23505はUNIQUE制約違反のDBエラーコード
+        alert("スタッフの追加に失敗しました。\n入力されたメールアドレスは既に使用されています。");
+      } else {
+        alert("スタッフの追加に失敗しました。時間をおいて再度お試しください。");
+      }
     }
-  }
+  };
 
   const addUser = async () => {
     if (!newUser.name.trim()) return
