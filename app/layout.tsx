@@ -1,17 +1,15 @@
-// app/layout.tsx
-
 // 1. 必要なモジュールをインポートします
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
-import { cn } from '@/lib/utils'; // この行は、もしなければ後で追加するので一旦そのままでOK
+import { cn } from '@/lib/utils';
 import './globals.css';
+import Header from '@/components/Header'; // ★★★ 修正点1: 新しいヘッダーをインポート ★★★
 
-// 2. Metadataオブジェクトを定義します（ここは変更なし）
+// 2. Metadataオブジェクトを定義します（あなたの要望に合わせて更新）
 export const metadata: Metadata = {
-  // titleはご自身のアプリ名に変更することをお勧めします
-  title: '安心ハウス日誌', 
-  description: '介護記録を管理するアプリケーション',
+  title: 'あんしん住宅活動日報', 
+  description: '日々の活動記録を管理するためのアプリケーション',
 };
 
 // 3. RootLayoutコンポーネントを修正します
@@ -21,19 +19,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // 4. <html>タグに言語(lang)とフォント変数を渡します
-    //    suppressHydrationWarning は、万が一他の原因で軽微なエラーが起きてもUI表示を止めないためのお守りです
+    // 4. <html>タグのフォント設定は、あなたの既存のものをそのまま維持します
     <html lang="ja" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       
-      {/* 5. <head>タグは完全に削除します。Next.jsが自動生成するので不要です。 */}
-      
-      {/* 6. <body>タグに、フォントを適用するための基本クラスを設定します */}
+      {/* 5. <body>タグのフォント設定も、あなたの既存のものをそのまま維持します */}
       <body className={cn(
         "min-h-screen bg-background font-sans antialiased"
-        // もし `cn` が未定義でエラーになる場合は、一旦以下の行に置き換えてください
-        // "min-h-screen bg-background font-sans antialiased"
       )}>
+        {/* ▼▼▼▼▼▼▼▼▼▼ 修正点2: ここにヘッダーを追加 ▼▼▼▼▼▼▼▼▼▼ */}
+        <Header />
         {children}
+        {/* ▲▲▲▲▲▲▲▲▲▲ ここまでが修正点 ▲▲▲▲▲▲▲▲▲▲ */}
       </body>
     </html>
   );

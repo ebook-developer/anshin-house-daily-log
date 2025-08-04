@@ -6,25 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, Plus, Users, UserCheck, Tag, AlertTriangle } from "lucide-react"
 import Link from "next/link"
+
+// ★ Userの型定義は不要なため削除
 
 interface Staff {
   id: string
   name: string
   email: string | null
-  is_active: boolean
-}
-
-interface User {
-  id: string
-  name: string
-  phone: string | null
-  address: string | null
-  assigned_staff_id: string | null
-  assigned_staff_name: string | null
   is_active: boolean
 }
 
@@ -37,19 +28,13 @@ interface ActivityType {
 
 export default function SettingsPage() {
   const [staff, setStaff] = useState<Staff[]>([])
-  const [users, setUsers] = useState<User[]>([])
+  // ★ users, newUser のStateは不要なため削除
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // フォーム状態
   const [newStaff, setNewStaff] = useState({ name: "", email: "" })
-  const [newUser, setNewUser] = useState({
-    name: "",
-    phone: "",
-    address: "",
-    assigned_staff_id: "none",
-  })
   const [newActivityType, setNewActivityType] = useState({ name: "", color: "#3B82F6" })
 
   useEffect(() => {
@@ -60,32 +45,19 @@ export default function SettingsPage() {
     try {
       setLoading(true);
       setError(null)
-
-      const [staffData, usersData, activityTypesData] = await Promise.all([
+      
+      // ★ usersDataの取得は不要なので削除
+      const [staffData, activityTypesData] = await Promise.all([
         supabase.from("staff").select("*").order("name"),
-        supabase
-          .from("users")
-          .select(`
-          *,
-          staff:assigned_staff_id (name)
-        `)
-          .order("name"),
         supabase.from("activity_types").select("*").order("name"),
       ])
 
       if (staffData.error) throw staffData.error
-      if (usersData.error) throw usersData.error
       if (activityTypesData.error) throw activityTypesData.error
 
       if (staffData.data) setStaff(staffData.data)
-      if (usersData.data) {
-        const formattedUsers = usersData.data.map((user: any) => ({
-          ...user,
-          assigned_staff_name: user.staff?.name || null,
-        }))
-        setUsers(formattedUsers)
-      }
       if (activityTypesData.data) setActivityTypes(activityTypesData.data)
+
     } catch (error) {
       console.error("データの取得に失敗しました:", error)
       setError("データの取得に失敗しました。Supabaseの設定を確認してください。")
@@ -95,42 +67,34 @@ export default function SettingsPage() {
   }
 
   const addStaff = async () => {
-    // 氏名が未入力、またはスペースのみの場合は処理を中断
     if (!newStaff.name.trim()) {
       alert("スタッフの氏名は必須です。");
       return;
     }
 
-    // Supabaseに送信するためのデータを準備・整形する
     const staffDataToInsert = {
       name: newStaff.name.trim(),
-      // emailが空文字、またはスペースのみの場合は null を、そうでなければその値を設定
       email: newStaff.email && newStaff.email.trim() !== "" ? newStaff.email.trim() : null,
     };
 
     try {
-      // 整形したデータをSupabaseに送信
       const { data, error } = await supabase
         .from("staff")
         .insert([staffDataToInsert])
         .select();
 
       if (error) {
-        // Supabaseから返されたエラーをスローしてcatchブロックに渡す
         throw error;
       }
       
-      // 成功した場合の処理
       console.log("追加されたスタッフ:", data);
-      setNewStaff({ name: "", email: "" }); // フォームをリセット
-      fetchData(); // 一覧を再取得して画面を更新
+      setNewStaff({ name: "", email: "" });
+      fetchData();
       alert("スタッフを追加しました");
 
     } catch (error: any) {
-      // エラーハンドリングを強化
       console.error("スタッフの追加に失敗しました:", error);
-
-      if (error.code === "23505") { // 23505はUNIQUE制約違反のDBエラーコード
+      if (error.code === "23505") {
         alert("スタッフの追加に失敗しました。\n入力されたメールアドレスは既に使用されています。");
       } else {
         alert("スタッフの追加に失敗しました。時間をおいて再度お試しください。");
@@ -138,33 +102,21 @@ export default function SettingsPage() {
     }
   };
 
-  const addUser = async () => {
-    if (!newUser.name.trim()) return
-
-    try {
-      const { error } = await supabase.from("users").insert([
-        {
-          ...newUser,
-          assigned_staff_id: newUser.assigned_staff_id === "none" ? null : newUser.assigned_staff_id,
-        },
-      ])
-
-      if (error) throw error
-
-      setNewUser({ name: "", phone: "", address: "", assigned_staff_id: "none" })
-      fetchData()
-      alert("利用者を追加しました")
-    } catch (error) {
-      console.error("利用者の追加に失敗しました:", error)
-      alert("利用者の追加に失敗しました")
-    }
-  }
+  // ★ addUser 関数は不要なため削除
 
   const addActivityType = async () => {
-    if (!newActivityType.name.trim()) return
-
+    if (!newActivityType.name.trim()) {
+      alert("活動種別名は必須です。");
+      return;
+    }
+    
     try {
-      const { error } = await supabase.from("activity_types").insert([newActivityType])
+      const { error } = await supabase.from("activity_types").insert([
+        {
+          name: newActivityType.name.trim(),
+          color: newActivityType.color,
+        }
+      ])
 
       if (error) throw error
 
@@ -180,7 +132,6 @@ export default function SettingsPage() {
   const toggleStaffStatus = async (id: string, currentStatus: boolean) => {
     try {
       const { error } = await supabase.from("staff").update({ is_active: !currentStatus }).eq("id", id)
-
       if (error) throw error
       fetchData()
     } catch (error) {
@@ -188,21 +139,11 @@ export default function SettingsPage() {
     }
   }
 
-  const toggleUserStatus = async (id: string, currentStatus: boolean) => {
-    try {
-      const { error } = await supabase.from("users").update({ is_active: !currentStatus }).eq("id", id)
-
-      if (error) throw error
-      fetchData()
-    } catch (error) {
-      console.error("ステータスの更新に失敗しました:", error)
-    }
-  }
+  // ★ toggleUserStatus 関数は不要なため削除
 
   const toggleActivityTypeStatus = async (id: string, currentStatus: boolean) => {
     try {
       const { error } = await supabase.from("activity_types").update({ is_active: !currentStatus }).eq("id", id)
-
       if (error) throw error
       fetchData()
     } catch (error) {
@@ -256,14 +197,11 @@ export default function SettingsPage() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="staff" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          {/* ★ TabsListから利用者管理を削除し、grid-cols-2に変更 */}
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="staff" className="flex items-center">
               <UserCheck className="h-4 w-4 mr-2" />
               スタッフ管理
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center">
-              <Users className="h-4 w-4 mr-2" />
-              利用者管理
             </TabsTrigger>
             <TabsTrigger value="activity-types" className="flex items-center">
               <Tag className="h-4 w-4 mr-2" />
@@ -339,106 +277,7 @@ export default function SettingsPage() {
             </Card>
           </TabsContent>
 
-          {/* 利用者管理 */}
-          <TabsContent value="users" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>新しい利用者の追加</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="user-name">氏名 *</Label>
-                    <Input
-                      id="user-name"
-                      value={newUser.name}
-                      onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                      placeholder="山田 一郎"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="user-phone">電話番号</Label>
-                    <Input
-                      id="user-phone"
-                      value={newUser.phone}
-                      onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
-                      placeholder="090-1234-5678"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="user-address">住所</Label>
-                    <Input
-                      id="user-address"
-                      value={newUser.address}
-                      onChange={(e) => setNewUser({ ...newUser, address: e.target.value })}
-                      placeholder="東京都渋谷区1-1-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="user-staff">担当スタッフ</Label>
-                    <Select
-                      value={newUser.assigned_staff_id}
-                      onValueChange={(value) => setNewUser({ ...newUser, assigned_staff_id: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="担当スタッフを選択" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">未割当</SelectItem>
-                        {staff
-                          .filter((s) => s.is_active)
-                          .map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <Button onClick={addUser} className="w-full">
-                      <Plus className="h-4 w-4 mr-2" />
-                      利用者を追加
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>利用者一覧</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {users.map((u) => (
-                    <div key={u.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <h3 className="font-medium">{u.name}</h3>
-                        <div className="text-sm text-gray-600">
-                          {u.phone && <span>{u.phone}</span>}
-                          {u.phone && u.assigned_staff_name && <span className="mx-2">•</span>}
-                          {u.assigned_staff_name && <span>担当: {u.assigned_staff_name}</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            u.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {u.is_active ? "有効" : "無効"}
-                        </span>
-                        <Button variant="outline" size="sm" onClick={() => toggleUserStatus(u.id, u.is_active)}>
-                          {u.is_active ? "無効化" : "有効化"}
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {/* ★ 利用者管理タブは完全に削除 */}
 
           {/* 活動種別管理 */}
           <TabsContent value="activity-types" className="space-y-6">

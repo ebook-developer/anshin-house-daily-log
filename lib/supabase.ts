@@ -44,8 +44,10 @@ export type Database = {
         }
       }
       users: {
+        // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ ここからが修正箇所です ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
         Row: {
           id: string
+          master_uid: string | null // ★ マスターシステムのUIDを保存する列
           name: string
           phone: string | null
           address: string | null
@@ -57,6 +59,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          master_uid: string // ★ マスターUIDはUpsert時に必須
           name: string
           phone?: string | null
           address?: string | null
@@ -68,6 +71,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          master_uid?: string
           name?: string
           phone?: string | null
           address?: string | null
@@ -77,6 +81,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
         }
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ここまでが修正箇所です ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
       }
       activity_types: {
         Row: {

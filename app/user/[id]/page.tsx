@@ -5,17 +5,15 @@ import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, User, Phone, MapPin, Calendar, Clock, AlertTriangle } from "lucide-react"
+import { ArrowLeft, User, Phone, MapPin, Calendar, Clock, AlertTriangle, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 
 interface UserDetail {
   id: string
   name: string
-  phone: string | null
-  address: string | null
-  notes: string | null
-  assigned_staff_name: string | null
+  master_uid: string | null // ★ master_uid を追加
+  // ★ phone, address, notes, assigned_staff_name は不要なので削除
 }
 
 interface ActivityRecord {
@@ -38,43 +36,33 @@ export default function UserDetailPage() {
   const [activities, setActivities] = useState<ActivityRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // ★ マスターDBのURLを環境変数から取得
+  const masterDbUrl = process.env.NEXT_PUBLIC_MASTER_DB_URL || "https://anshinhousedb.vercel.app";
+
 
   useEffect(() => {
     if (userId) {
-      fetchUserData()
+      fetchData()
     }
   }, [userId])
 
-  const fetchUserData = async () => {
+  const fetchData = async () => {
     try {
+      setLoading(true);
       setError(null)
 
-      // 利用者情報を取得
+      // ★ usersテーブルからは、staffとの結合をやめ、master_uidを取得する
       const { data: userData, error: userError } = await supabase
         .from("users")
-        .select(`
-          id,
-          name,
-          phone,
-          address,
-          notes,
-          staff:assigned_staff_id (
-            name
-          )
-        `)
+        .select("id, name, master_uid")
         .eq("id", userId)
         .single()
 
       if (userError) throw userError
+      if (userData) setUser(userData)
 
-      if (userData) {
-        setUser({
-          ...userData,
-          assigned_staff_name: userData.staff?.name || null,
-        })
-      }
-
-      // 活動記録を取得
+      // 活動記録の取得ロジックは変更なし
       const { data: activitiesData, error: activitiesError } = await supabase
         .from("activity_records")
         .select(`
@@ -84,8 +72,8 @@ export default function UserDetailPage() {
           has_next_appointment,
           next_appointment_date,
           next_appointment_content,
-          staff!inner(name),
-          activity_types!inner(name, color)
+          staff:staff_id (name),
+          activity_types:activity_type_id (name, color)
         `)
         .eq("user_id", userId)
         .order("activity_date", { ascending: false })
@@ -106,9 +94,9 @@ export default function UserDetailPage() {
         }))
         setActivities(formattedActivities)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("データの取得に失敗しました:", error)
-      setError("データの取得に失敗しました。Supabaseの設定を確認してください。")
+      setError(error.message || "データの取得に失敗しました。")
     } finally {
       setLoading(false)
     }
@@ -179,50 +167,34 @@ export default function UserDetailPage() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* 利用者情報 */}
+          {/* ▼▼▼▼▼▼▼▼▼▼ 利用者情報カードをシンプル化し、リンクボタンを追加 ▼▼▼▼▼▼▼▼▼▼ */}
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <User className="h-5 w-5 mr-2" />
-                  利用者情報
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <User className="h-5 w-5 mr-2" />
+                    利用者情報
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">{user.name}</h2>
                 </div>
-
-                {user.phone && (
-                  <div className="flex items-center text-gray-600">
-                    <Phone className="h-4 w-4 mr-2" />
-                    <span>{user.phone}</span>
-                  </div>
-                )}
-
-                {user.address && (
-                  <div className="flex items-start text-gray-600">
-                    <MapPin className="h-4 w-4 mr-2 mt-1" />
-                    <span>{user.address}</span>
-                  </div>
-                )}
-
-                <div>
-                  <span className="text-sm font-medium text-gray-500">担当スタッフ</span>
-                  <p className="text-gray-900">{user.assigned_staff_name || "未割当"}</p>
-                </div>
-
-                {user.notes && (
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">備考</span>
-                    <p className="text-gray-900 text-sm">{user.notes}</p>
-                  </div>
+                {user.master_uid && (
+                   <Button asChild className="w-full">
+                    <a href={`${masterDbUrl}/users/${user.master_uid}`} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      マスター情報を表示
+                    </a>
+                  </Button>
                 )}
               </CardContent>
             </Card>
           </div>
+          {/* ▲▲▲▲▲▲▲▲▲▲ ここまで ▲▲▲▲▲▲▲▲▲▲ */}
 
-          {/* 活動履歴 */}
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>

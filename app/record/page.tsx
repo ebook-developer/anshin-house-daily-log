@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,30 +10,34 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowLeft, Save, AlertTriangle } from "lucide-react"
+import { ArrowLeft, Save, AlertTriangle, Check, ChevronsUpDown } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { cn } from "@/lib/utils"
 
+// 型定義
 interface Staff {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
-
-interface User {
-  id: string
-  name: string
-}
-
 interface ActivityType {
-  id: string
-  name: string
-  color: string
+  id: string;
+  name: string;
+  color: string;
+}
+// マスターDBから取得する利用者の型
+interface MasterUser {
+  uid: string;
+  name: string;
 }
 
 export default function RecordPage() {
   const router = useRouter()
   const [staff, setStaff] = useState<Staff[]>([])
-  const [users, setUsers] = useState<User[]>([])
+  // ★利用者リストの型をMasterUserに変更
+  const [masterUsers, setMasterUsers] = useState<MasterUser[]>([])
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -43,7 +46,8 @@ export default function RecordPage() {
   const [formData, setFormData] = useState({
     activity_date: new Date().toISOString().split("T")[0],
     staff_id: "",
-    user_id: "",
+    // ★user_id を master_user_uid に変更。活動記録に直接紐づけるのはマスターのUID。
+    master_user_uid: "", 
     activity_type_id: "",
     content: "",
     has_next_appointment: false,
@@ -51,49 +55,97 @@ export default function RecordPage() {
     next_appointment_content: "",
   })
 
+  // ★APIからマスター利用者リストを取得する関数
+  const fetchMasterUsers = async (): Promise<MasterUser[]> => {
+    // 環境変数からAPIの情報を取得（NEXT_PUBLIC_プレフィックスが必要）
+    const apiUrl = process.env.NEXT_PUBLIC_MASTER_DB_API_URL;
+    const apiKey = process.env.NEXT_PUBLIC_MASTER_DB_API_KEY;
+
+    if (!apiUrl || !apiKey) {
+      throw new Error("マスターDBのAPI設定が環境変数にありません。");
+    }
+
+    const response = await fetch(`${apiUrl}/api/v1/users`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`APIからのデータ取得に失敗しました: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setError(null)
+        setLoading(true)
+
+        // ★Promise.allでマスター利用者リストも一緒に取得
+        const [staffData, masterUsersData, activityTypesData] = await Promise.all([
+          supabase.from("staff").select("id, name").eq("is_active", true).order("name"),
+          fetchMasterUsers(), // ★APIを呼び出す
+          supabase.from("activity_types").select("id, name, color").eq("is_active", true).order("name"),
+        ])
+
+        if (staffData.error) throw staffData.error
+        if (activityTypesData.error) throw activityTypesData.error
+        
+        if (staffData.data) setStaff(staffData.data)
+        setMasterUsers(masterUsersData) // ★Stateにセット
+        if (activityTypesData.data) setActivityTypes(activityTypesData.data)
+
+      } catch (error: any) {
+        console.error("データの取得に失敗しました:", error)
+        setError(error.message || "データの取得に失敗しました。設定を確認してください。")
+      } finally {
+        setLoading(false)
+      }
+    }
     fetchData()
   }, [])
 
-  const fetchData = async () => {
-    try {
-      setError(null)
-
-      const [staffData, usersData, activityTypesData] = await Promise.all([
-        supabase.from("staff").select("id, name").eq("is_active", true).order("name"),
-        supabase.from("users").select("id, name").eq("is_active", true).order("name"),
-        supabase.from("activity_types").select("id, name, color").eq("is_active", true).order("name"),
-      ])
-
-      if (staffData.error) throw staffData.error
-      if (usersData.error) throw usersData.error
-      if (activityTypesData.error) throw activityTypesData.error
-
-      if (staffData.data) setStaff(staffData.data)
-      if (usersData.data) setUsers(usersData.data)
-      if (activityTypesData.data) setActivityTypes(activityTypesData.data)
-    } catch (error) {
-      console.error("データの取得に失敗しました:", error)
-      setError("データの取得に失敗しました。Supabaseの設定を確認してください。")
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData.master_user_uid || !formData.staff_id || !formData.activity_type_id) {
+        alert("担当スタッフ、利用者、活動種別は必須です。");
+        return;
+    }
+
     setSaving(true)
 
     try {
-      const { error } = await supabase.from("activity_records").insert([
+      // daily-logのusersテーブルに、マスターの情報を同期・保存する
+      const { data: userInLog, error: upsertError } = await supabase
+        .from('users')
+        .upsert({
+            master_uid: formData.master_user_uid,
+            name: masterUsers.find(u => u.uid === formData.master_user_uid)?.name || '不明な利用者'
+        }, { onConflict: 'master_uid' }) // master_uidが同じなら更新、なければ挿入
+        .select()
+        .single();
+      
+      if (upsertError) throw upsertError;
+      if (!userInLog) throw new Error("利用者情報の同期に失敗しました。");
+
+      // 活動記録を保存。user_idにはdaily-log内のusersテーブルのIDを使う
+      const { error: recordError } = await supabase.from("activity_records").insert([
         {
-          ...formData,
+          user_id: userInLog.id, // ★ここが重要！
+          staff_id: formData.staff_id,
+          activity_type_id: formData.activity_type_id,
+          activity_date: formData.activity_date,
+          content: formData.content,
+          has_next_appointment: formData.has_next_appointment,
           next_appointment_date: formData.has_next_appointment ? formData.next_appointment_date : null,
           next_appointment_content: formData.has_next_appointment ? formData.next_appointment_content : null,
         },
       ])
 
-      if (error) throw error
+      if (recordError) throw recordError
 
       alert("活動記録を保存しました")
       router.push("/")
@@ -104,6 +156,8 @@ export default function RecordPage() {
       setSaving(false)
     }
   }
+
+  const [popoverOpen, setPopoverOpen] = useState(false)
 
   if (loading) {
     return (
@@ -170,6 +224,7 @@ export default function RecordPage() {
                   <Select
                     value={formData.staff_id}
                     onValueChange={(value) => setFormData({ ...formData, staff_id: value })}
+                    required
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="スタッフを選択してください" />
@@ -186,21 +241,49 @@ export default function RecordPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="user_id">利用者 *</Label>
-                  <Select
-                    value={formData.user_id}
-                    onValueChange={(value) => setFormData({ ...formData, user_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="利用者を選択してください" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={popoverOpen}
+                        className="w-full justify-between font-normal"
+                      >
+                        {formData.master_user_uid
+                          ? masterUsers.find((user) => user.uid === formData.master_user_uid)?.name
+                          : "利用者を選択してください"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                      <Command>
+                        <CommandInput placeholder="利用者を検索..." />
+                        <CommandList>
+                          <CommandEmpty>該当する利用者がいません。</CommandEmpty>
+                          <CommandGroup>
+                            {masterUsers.map((user) => (
+                              <CommandItem
+                                key={user.uid}
+                                value={user.name}
+                                onSelect={() => {
+                                  setFormData({ ...formData, master_user_uid: user.uid })
+                                  setPopoverOpen(false)
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    formData.master_user_uid === user.uid ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {user.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 <div className="space-y-2">
@@ -208,6 +291,7 @@ export default function RecordPage() {
                   <Select
                     value={formData.activity_type_id}
                     onValueChange={(value) => setFormData({ ...formData, activity_type_id: value })}
+                    required
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="活動種別を選択してください" />
