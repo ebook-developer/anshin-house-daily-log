@@ -1,35 +1,36 @@
-// 1. 必要なモジュールをインポートします
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import { cn } from '@/lib/utils';
 import './globals.css';
-import Header from '@/components/Header'; // ★★★ 修正点1: 新しいヘッダーをインポート ★★★
+import Header from '@/components/Header';
 
-// 2. Metadataオブジェクトを定義します（あなたの要望に合わせて更新）
 export const metadata: Metadata = {
   title: 'あんしん住宅活動日報', 
   description: '日々の活動記録を管理するためのアプリケーション',
 };
 
-// 3. RootLayoutコンポーネントを修正します
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    // 4. <html>タグのフォント設定は、あなたの既存のものをそのまま維持します
     <html lang="ja" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
-      
-      {/* 5. <body>タグのフォント設定も、あなたの既存のものをそのまま維持します */}
       <body className={cn(
         "min-h-screen bg-background font-sans antialiased"
       )}>
-        {/* ▼▼▼▼▼▼▼▼▼▼ 修正点2: ここにヘッダーを追加 ▼▼▼▼▼▼▼▼▼▼ */}
         <Header />
-        {children}
-        {/* ▲▲▲▲▲▲▲▲▲▲ ここまでが修正点 ▲▲▲▲▲▲▲▲▲▲ */}
+
+        {/* ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ */}
+        {/* max-w-7xl を max-w-6xl に変更して、左右の余白を広げます。           */}
+        {/* もっと余白が欲しければ、max-w-5xl や max-w-4xl に変更してください。 */}
+        {/* ==================================================================== */}
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          {children}
+        </main>
+        {/* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */}
+
       </body>
     </html>
   );
