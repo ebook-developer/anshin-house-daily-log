@@ -1,7 +1,5 @@
-// middleware.ts
-
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -32,13 +30,37 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getSession()
+  // ▼▼▼▼▼▼▼▼▼▼ ここからが重要な追加箇所です ▼▼▼▼▼▼▼▼▼▼
+  
+  // ユーザーのセッション情報を取得
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // ログインしていない、かつ、アクセス先がログインページでない場合
+  if (!user && request.nextUrl.pathname !== '/login') {
+    // ログインページへリダイレクト
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+  
+  // ログイン済み、かつ、アクセス先がログインページの場合
+  if (user && request.nextUrl.pathname === '/login') {
+    // ダッシュボード（ホームページ）へリダイレクト
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // ▲▲▲▲▲▲▲▲▲▲ ここまでが重要な追加箇所です ▲▲▲▲▲▲▲▲▲▲
 
   return response
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - api (API routes)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 }
