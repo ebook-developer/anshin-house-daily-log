@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator"
 export default function Header() {
   const pathname = usePathname();
   
-  const masterDbUrl = process.env.NEXT_PUBLIC_MASTER_DB_URL || "/";
+  const masterDbUrl = process.env.NEXT_PUBLIC_MASTER_DB_API_URL || "/";
 
   const navLinks = [
     // ▼▼▼ 修正: 「記録追加」をプライマリアクションとして variant="default" に変更 ▼▼▼
