@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Save, AlertTriangle, Check, ChevronsUpDown, ArrowLeft } from "lucide-react" // ArrowLeftを追加
+import { Save, AlertTriangle, Check, ChevronsUpDown, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -41,17 +41,20 @@ export default function RecordPage() {
         
         const fetchMasterUsers = async (): Promise<MasterUser[]> => {
           const apiUrl = process.env.NEXT_PUBLIC_MASTER_DB_API_URL;
-          // ▼▼▼ 修正: apiKeyの定義とチェックを削除 ▼▼▼
-          if (!apiUrl) {
-            throw new Error("マスターDBのAPI URL設定が環境変数にありません。");
+          // ▼▼▼ 修正: apiKeyの定義とチェックを復活 ▼▼▼
+          const apiKey = process.env.NEXT_PUBLIC_MASTER_DB_API_KEY;
+          if (!apiUrl || !apiKey) {
+            throw new Error("マスターDBのAPI設定が環境変数にありません。");
           }
 
-          // ▼▼▼ 修正: headersからAuthorizationを削除 ▼▼▼
-          // anshinhousedb側のAPIが認証を必要としない公開APIであると想定
-          const response = await fetch(`${apiUrl}/api/v1/users`);
+          // ▼▼▼ 修正: headersにAuthorizationを復活 ▼▼▼
+          const response = await fetch(`${apiUrl}/api/v1/users`, {
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+          });
           
           if (!response.ok) {
-            throw new Error(`APIからのデータ取得に失敗しました: ${response.statusText}`);
+            // ステータスコードも含めて、より詳細なエラーを投げる
+            throw new Error(`APIからのデータ取得に失敗しました: Status ${response.status}`);
           }
           return response.json();
         }
