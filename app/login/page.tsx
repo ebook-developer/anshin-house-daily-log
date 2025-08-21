@@ -1,9 +1,8 @@
-// app/login/page.tsx
-
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+// ▼▼▼ 修正: useRouter をインポート文から削除 ▼▼▼
+// import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -11,14 +10,13 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
 export default function LoginPage() {
-  const router = useRouter()
+  // ▼▼▼ 修正: 未使用の router の定義を削除 ▼▼▼
+  // const router = useRouter()
   const supabase = createClient()
 
-  // ▼▼▼ チームで共有する固定のメールアドレスをここで定義 ▼▼▼
-  // Supabaseに登録した共有アカウントのメールアドレスに書き換えてください
+  // Supabaseに登録した共有アカウントのメールアドレス
   const TEAM_EMAIL = 'ebookcloud.developer@gmail.com'
 
-  // ▼▼▼ emailのStateは不要になったので削除 ▼▼▼
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -29,13 +27,11 @@ export default function LoginPage() {
     setLoading(true)
 
     const { error } = await supabase.auth.signInWithPassword({
-      // ▼▼▼ emailには固定のTEAM_EMAILを使用 ▼▼▼
       email: TEAM_EMAIL,
       password,
     })
 
     if (error) {
-      // エラーメッセージをより分かりやすく調整
       if (error.message === 'Invalid login credentials') {
         setError('パスワードが正しくありません。')
       } else {
@@ -45,8 +41,7 @@ export default function LoginPage() {
       return
     }
 
-    // ログイン成功後、ダッシュボード（ホームページ）に遷移
-    router.push('/')
+    window.location.href = '/'
   }
 
   return (
@@ -55,13 +50,11 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle className="text-2xl font-bold">ログイン</CardTitle>
           <CardDescription>
-            {/* ▼▼▼ 説明文を修正 ▼▼▼ */}
             チームで共有しているパスワードを入力してください。
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
-            {/* ▼▼▼ メールアドレスの入力欄を完全に削除 ▼▼▼ */}
             <div className="space-y-2">
               <Label htmlFor="password">パスワード</Label>
               <Input
