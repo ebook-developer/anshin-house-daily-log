@@ -5,36 +5,34 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { User, Calendar, Clock, AlertTriangle, ExternalLink } from "lucide-react"
+// ▼▼▼ 修正: useRouter をインポート文から削除 ▼▼▼
+import { User, Calendar, Clock, AlertTriangle, ExternalLink, Pencil, Trash2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+// ▼▼▼ 修正: useParams のみインポート ▼▼▼
 import { useParams } from "next/navigation"
 import type { Database } from "@/lib/database.types"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
-interface UserDetail {
-  id: string
-  name: string
-  master_uid: string | null
-}
-
-interface ActivityRecord {
-  id: string
-  activity_date: string
-  content: string
-  staff_name: string
-  activity_type_name: string
-  activity_type_color: string | null
-  has_next_appointment: boolean // ここは boolean のままでOK
-  next_appointment_date: string | null
-  next_appointment_content: string | null
-}
-
+interface UserDetail { id: string; name: string; master_uid: string | null; }
+interface ActivityRecord { id: string; activity_date: string; content: string; staff_name: string; activity_type_name: string; activity_type_color: string | null; has_next_appointment: boolean; next_appointment_date: string | null; next_appointment_content: string | null; }
 type Staff = Database['public']['Tables']['staff']['Row']
 type ActivityType = Database['public']['Tables']['activity_types']['Row']
-
 
 export default function UserDetailPage() {
   const supabase = createClient()
   const params = useParams()
+  // ▼▼▼ 修正: 未使用の router の定義を削除 ▼▼▼
+  // const router = useRouter() 
   const userId = params.id as string
   const [user, setUser] = useState<UserDetail | null>(null)
   const [activities, setActivities] = useState<ActivityRecord[]>([])
@@ -63,7 +61,6 @@ export default function UserDetailPage() {
             staff_name: (record.staff as Staff | null)?.name ?? '不明',
             activity_type_name: (record.activity_types as ActivityType | null)?.name ?? '不明',
             activity_type_color: (record.activity_types as ActivityType | null)?.color ?? '#cccccc',
-            // ▼▼▼ 修正: null の場合に false を設定する (Nullish Coalescing Operator) ▼▼▼
             has_next_appointment: record.has_next_appointment ?? false,
             next_appointment_date: record.next_appointment_date,
             next_appointment_content: record.next_appointment_content,
@@ -79,6 +76,23 @@ export default function UserDetailPage() {
     }
     fetchData()
   }, [userId, supabase])
+
+  const handleDelete = async (recordId: string) => {
+    try {
+      const { error: deleteError } = await supabase
+        .from('activity_records')
+        .delete()
+        .eq('id', recordId)
+      
+      if (deleteError) throw deleteError
+
+      setActivities(activities.filter(a => a.id !== recordId))
+      alert("記録を削除しました。")
+    } catch (err) {
+      console.error("削除に失敗しました:", err);
+      alert("記録の削除に失敗しました。");
+    }
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short" })
@@ -111,6 +125,9 @@ export default function UserDetailPage() {
     <>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold">利用者詳細</h1>
+        <Link href="/">
+          <Button variant="ghost"><ArrowLeft className="h-4 w-4 mr-2" />ダッシュボードに戻る</Button>
+        </Link>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">
@@ -129,20 +146,40 @@ export default function UserDetailPage() {
               {activities.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">まだ活動記録がありません</div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {activities.map((activity) => (
-                    <div key={activity.id} className="border-l-4 pl-4 pb-4" style={{ borderColor: activity.activity_type_color || '#cccccc' }}>
+                    <div key={activity.id} className="border-l-4 pl-4" style={{ borderColor: activity.activity_type_color || '#cccccc' }}>
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-2 gap-2">
                         <div className="flex items-center space-x-2"><Badge variant="outline" style={{ backgroundColor: (activity.activity_type_color || '#cccccc') + "20", borderColor: activity.activity_type_color || '#cccccc', color: activity.activity_type_color || '#cccccc' }}>{activity.activity_type_name}</Badge><span className="text-sm text-gray-600">担当: {activity.staff_name}</span></div>
                         <div className="flex items-center text-sm text-gray-500"><Calendar className="h-4 w-4 mr-1" />{formatDate(activity.activity_date)}</div>
                       </div>
-                      <p className="text-gray-900 mb-2">{activity.content}</p>
+                      <p className="text-gray-900 mb-3 whitespace-pre-wrap">{activity.content}</p>
                       {activity.has_next_appointment && activity.next_appointment_date && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                           <div className="flex items-center mb-1"><Calendar className="h-4 w-4 text-blue-600 mr-1" /><span className="text-sm font-medium text-blue-800">次回予定: {formatDate(activity.next_appointment_date)}</span></div>
-                          {activity.next_appointment_content && (<p className="text-sm text-blue-700">{activity.next_appointment_content}</p>)}
+                          {activity.next_appointment_content && (<p className="text-sm text-blue-700 whitespace-pre-wrap">{activity.next_appointment_content}</p>)}
                         </div>
                       )}
+                      <div className="flex justify-end items-center space-x-2">
+                        <Link href={`/record/${activity.id}/edit`}>
+                          <Button variant="outline" size="sm"><Pencil className="h-3 w-3 mr-1.5"/>編集</Button>
+                        </Link>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm"><Trash2 className="h-3 w-3 mr-1.5"/>削除</Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>本当に削除しますか？</AlertDialogTitle>
+                              <AlertDialogDescription>この操作は元に戻せません。この活動記録はデータベースから完全に削除されます。</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(activity.id)}>はい、削除します</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
                   ))}
                 </div>

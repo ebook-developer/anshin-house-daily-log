@@ -133,6 +133,7 @@ export default function Dashboard() {
         <div className="border rounded-lg p-4">
           <h3 className="text-sm font-medium text-muted-foreground">要注意利用者</h3>
           <p className="text-2xl font-bold text-red-600">{users.filter((u) => u.is_overdue).length}名</p>
+        <p className="text-xs text-muted-foreground">90日以上未接触</p>
         </div>
         <div className="border rounded-lg p-4">
           <h3 className="text-sm font-medium text-muted-foreground">今日の日付</h3>
