@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Save, AlertTriangle, Check, ChevronsUpDown } from "lucide-react"
+import { Save, AlertTriangle, Check, ChevronsUpDown, ArrowLeft } from "lucide-react" // ArrowLeftを追加
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -38,14 +38,24 @@ export default function RecordPage() {
       try {
         setLoading(true)
         setError(null)
+        
         const fetchMasterUsers = async (): Promise<MasterUser[]> => {
           const apiUrl = process.env.NEXT_PUBLIC_MASTER_DB_API_URL;
-          const apiKey = process.env.NEXT_PUBLIC_MASTER_DB_API_KEY;
-          if (!apiUrl || !apiKey) throw new Error("マスターDBのAPI設定が環境変数にありません。");
-          const response = await fetch(`${apiUrl}/api/v1/users`, { headers: { 'Authorization': `Bearer ${apiKey}` } });
-          if (!response.ok) throw new Error(`APIからのデータ取得に失敗しました: ${response.statusText}`);
+          // ▼▼▼ 修正: apiKeyの定義とチェックを削除 ▼▼▼
+          if (!apiUrl) {
+            throw new Error("マスターDBのAPI URL設定が環境変数にありません。");
+          }
+
+          // ▼▼▼ 修正: headersからAuthorizationを削除 ▼▼▼
+          // anshinhousedb側のAPIが認証を必要としない公開APIであると想定
+          const response = await fetch(`${apiUrl}/api/v1/users`);
+          
+          if (!response.ok) {
+            throw new Error(`APIからのデータ取得に失敗しました: ${response.statusText}`);
+          }
           return response.json();
         }
+
         const [staffData, masterUsersData, activityTypesData] = await Promise.all([
           supabase.from("staff").select("id, name").eq("is_active", true).order("name"),
           fetchMasterUsers(),
@@ -113,7 +123,12 @@ export default function RecordPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6"><h1 className="text-2xl sm:text-3xl font-bold">活動記録の追加</h1></div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold">活動記録の追加</h1>
+        <Link href="/">
+          <Button variant="ghost"><ArrowLeft className="h-4 w-4 mr-2" />ダッシュボードに戻る</Button>
+        </Link>
+      </div>
       <Card>
         <CardHeader><CardTitle className="text-xl sm:text-2xl">新しい活動記録</CardTitle></CardHeader>
         <CardContent>
