@@ -45,7 +45,7 @@ export default function CalendarComponent() {
           return date;
         }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (_e) { // ▼▼▼ 修正: ESLintルールをこの行だけ無効化 ▼▼▼
+      } catch (_e) {
         // Do nothing, fall back to default
       }
     }
@@ -189,11 +189,14 @@ export default function CalendarComponent() {
                 <div key={index} className={`relative p-2 border-b border-r border-gray-200 ${!day.isCurrentMonth ? "bg-gray-50" : "bg-white"}`}>
                   <div className={`text-xs sm:text-sm font-medium mb-1 ${!day.isCurrentMonth ? "text-gray-400" : index % 7 === 0 ? "text-red-600" : index % 7 === 6 ? "text-blue-600" : "text-gray-900"} ${day.date.toDateString() === new Date().toDateString() ? "bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center" : ""}`}>{day.date.getDate()}</div>
                   <div className="space-y-1">
+                    {/* ▼▼▼▼▼▼▼▼▼▼ ここからが修正箇所です ▼▼▼▼▼▼▼▼▼▼ */}
                     {day.activities.slice(0, 2).map((activity) => (
-                      <div key={activity.id} className="text-xs p-1 rounded truncate" style={{ backgroundColor: (activity.activity_type_color || '#cccccc') + "20", borderLeft: `3px solid ${activity.activity_type_color || '#cccccc'}`}} title={`${activity.user_name} - ${activity.staff_name}`}>
-                        <div className="font-medium text-gray-800">{activity.user_name}</div>
-                        <div className="text-gray-600 hidden sm:block">{activity.staff_name}</div>
-                      </div>
+                      <DialogTrigger key={activity.id} asChild onClick={() => setSelectedDayActivities(day.activities)}>
+                        <div className="text-xs p-1 rounded truncate cursor-pointer hover:bg-gray-100" style={{ backgroundColor: (activity.activity_type_color || '#cccccc') + "20", borderLeft: `3px solid ${activity.activity_type_color || '#cccccc'}`}} title={`${activity.user_name} - ${activity.staff_name}`}>
+                          <div className="font-medium text-gray-800">{activity.user_name}</div>
+                          <div className="text-gray-600 hidden sm:block">{activity.staff_name}</div>
+                        </div>
+                      </DialogTrigger>
                     ))}
                     {day.activities.length > 2 && (
                       <DialogTrigger asChild onClick={() => setSelectedDayActivities(day.activities)}>
@@ -202,6 +205,7 @@ export default function CalendarComponent() {
                         </div>
                       </DialogTrigger>
                     )}
+                    {/* ▲▲▲▲▲▲▲▲▲▲ ここまでが修正箇所です ▲▲▲▲▲▲▲▲▲▲ */}
                   </div>
                 </div>
               ))}
