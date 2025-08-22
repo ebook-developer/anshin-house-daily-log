@@ -158,7 +158,7 @@ export default function EditRecordPage() {
               <div className="space-y-2"><Label htmlFor="start_time">開始時間</Label><Input id="start_time" type="time" value={formData.start_time || ""} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}/></div>
               <div className="space-y-2"><Label htmlFor="end_time">終了時間</Label><Input id="end_time" type="time" value={formData.end_time || ""} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}/></div>
             </div>
-            <p className="text-xs text-muted-foreground -mt-4 ml-1">時間は任意項目です。移動時間は含めず、実際の支援時間を入力してください。</p>
+<p className="text-xs text-gray-700 font-medium -mt-4 ml-1">※移動時間は含めず、実際の支援時間を入力してください。</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2"><Label>利用者 (編集不可)</Label><Input value={userName} disabled /></div>

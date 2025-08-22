@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, AlertTriangle, Calendar as CalendarIcon, User } from "lucide-react"
+import { ChevronLeft, ChevronRight, AlertTriangle, Calendar as CalendarIcon, User, Hourglass } from "lucide-react"
 import Link from "next/link"
 import {
   Dialog,
@@ -21,9 +21,12 @@ import type { Database } from "@/lib/database.types"
 type ActivityRecordUser = Database['public']['Tables']['users']['Row']
 type ActivityRecordStaff = Database['public']['Tables']['staff']['Row']
 type ActivityRecordType = Database['public']['Tables']['activity_types']['Row']
+
 interface ActivityRecord {
   id: string
   activity_date: string
+  start_time: string | null
+  end_time: string | null
   content: string | null
   user_id: string
   user_name: string
@@ -71,10 +74,11 @@ export default function CalendarComponent() {
 
         const { data, error: fetchError } = await supabase
           .from("activity_records")
-          .select(`id, activity_date, content, user_id, users!inner(name), staff!inner(name), activity_types!inner(name, color)`)
+          .select(`id, activity_date, start_time, end_time, content, user_id, users!inner(name), staff!inner(name), activity_types!inner(name, color)`)
           .gte("activity_date", startDate)
           .lte("activity_date", endDate)
-          .order("activity_date")
+          .order("activity_date", { ascending: true })
+          .order("start_time", { ascending: true, nullsFirst: true })
 
         if (fetchError) throw fetchError
         if (data) {
@@ -85,6 +89,8 @@ export default function CalendarComponent() {
             return {
               id: record.id,
               activity_date: record.activity_date,
+              start_time: record.start_time,
+              end_time: record.end_time,
               content: record.content,
               user_id: record.user_id,
               user_name: user?.name ?? '不明',
@@ -133,6 +139,27 @@ export default function CalendarComponent() {
   
   const formatDateForTitle = (date: Date) => {
     return date.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+  }
+
+  const formatTime = (timeString: string | null) => {
+    if (!timeString) return null;
+    const [hours, minutes] = timeString.split(':');
+    return `${hours}:${minutes}`;
+  }
+
+  const calculateDuration = (start: string | null, end: string | null) => {
+    if (!start || !end) return null;
+    try {
+      const startDate = new Date(`1970-01-01T${start}`);
+      const endDate = new Date(`1970-01-01T${end}`);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+      const diff = endDate.getTime() - startDate.getTime();
+      if (diff < 0) return null;
+      return Math.floor(diff / (1000 * 60));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_e) { // ▼▼▼ 修正: 未使用変数を _e にし、ESLintルールを無効化 ▼▼▼
+      return null;
+    }
   }
 
   const days = getDaysInMonth(currentDate)
@@ -221,25 +248,41 @@ export default function CalendarComponent() {
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto p-1">
           <div className="space-y-4">
-            {selectedDayActivities.map((activity) => (
-              <div key={activity.id} className="border-l-4 p-3" style={{ borderColor: activity.activity_type_color || '#cccccc' }}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <Badge variant="outline" style={{ backgroundColor: (activity.activity_type_color || '#cccccc') + "20", borderColor: activity.activity_type_color || '#cccccc', color: activity.activity_type_color || '#cccccc', marginBottom: '0.5rem' }}>
-                      {activity.activity_type_name}
-                    </Badge>
-                    <Link href={`/user/${activity.user_id}`} className="block">
-                      <h3 className="font-bold text-lg text-blue-700 hover:underline flex items-center">
-                        <User className="h-4 w-4 mr-1.5" />
-                        {activity.user_name}
-                      </h3>
-                    </Link>
-                    <p className="text-sm text-gray-600 mt-1">担当: {activity.staff_name}</p>
+            {selectedDayActivities.map((activity) => {
+              const duration = calculateDuration(activity.start_time, activity.end_time);
+              return (
+                <div key={activity.id} className="border-l-4 p-3" style={{ borderColor: activity.activity_type_color || '#cccccc' }}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <Badge variant="outline" style={{ backgroundColor: (activity.activity_type_color || '#cccccc') + "20", borderColor: activity.activity_type_color || '#cccccc', color: activity.activity_type_color || '#cccccc' }}>
+                        {activity.activity_type_name}
+                      </Badge>
+                      <Link href={`/user/${activity.user_id}`} className="block mt-2">
+                        <h3 className="font-bold text-lg text-blue-700 hover:underline flex items-center">
+                          <User className="h-4 w-4 mr-1.5" />
+                          {activity.user_name}
+                        </h3>
+                      </Link>
+                      <p className="text-sm text-gray-600 mt-1">担当: {activity.staff_name}</p>
+                    </div>
+                    {(activity.start_time || duration != null) && (
+                      <div className="text-right text-sm text-gray-600">
+                        {activity.start_time && (
+                          <div className="font-mono">{formatTime(activity.start_time)} - {formatTime(activity.end_time) || '...'}</div>
+                        )}
+                        {duration !== null && (
+                          <div className="flex items-center justify-end text-xs font-semibold text-blue-700 mt-1">
+                            <Hourglass className="h-3 w-3 mr-1"/>
+                            ({duration}分)
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
+                  <p className="text-gray-800 mt-2 bg-gray-50 p-2 rounded-md whitespace-pre-wrap">{activity.content || '(内容は記入されていません)'}</p>
                 </div>
-                <p className="text-gray-800 mt-2 bg-gray-50 p-2 rounded-md">{activity.content || '(内容は記入されていません)'}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </DialogContent>

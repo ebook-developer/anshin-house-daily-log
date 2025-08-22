@@ -1,4 +1,3 @@
-//app/user/[id]/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -6,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { User, Calendar, Clock, AlertTriangle, ExternalLink, Pencil, Trash2, ArrowLeft } from "lucide-react"
+import { User, Calendar, Clock, AlertTriangle, ExternalLink, Pencil, Trash2, ArrowLeft, Hourglass } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import type { Database } from "@/lib/database.types"
@@ -26,6 +25,8 @@ interface UserDetail { id: string; name: string; master_uid: string | null; }
 interface ActivityRecord {
   id: string
   activity_date: string
+  start_time: string | null
+  end_time: string | null
   content: string | null
   staff_name: string
   activity_type_name: string
@@ -58,13 +59,15 @@ export default function UserDetailPage() {
         if (userError) throw userError
         if (userData) setUser(userData)
 
-        const { data: activitiesData, error: activitiesError } = await supabase.from("activity_records").select(`id, activity_date, content, has_next_appointment, next_appointment_date, next_appointment_content, staff:staff_id (name), activity_types:activity_type_id (name, color)`).eq("user_id", userId).order("activity_date", { ascending: false })
+        const { data: activitiesData, error: activitiesError } = await supabase.from("activity_records").select(`id, activity_date, start_time, end_time, content, has_next_appointment, next_appointment_date, next_appointment_content, staff:staff_id (name), activity_types:activity_type_id (name, color)`).eq("user_id", userId).order("activity_date", { ascending: false, nullsFirst: false }).order("start_time", { ascending: false, nullsFirst: false })
         if (activitiesError) throw activitiesError
 
         if (activitiesData) {
           const formattedActivities = activitiesData.map((record) => ({
             id: record.id,
             activity_date: record.activity_date,
+            start_time: record.start_time,
+            end_time: record.end_time,
             content: record.content,
             staff_name: (record.staff as Staff | null)?.name ?? '不明',
             activity_type_name: (record.activity_types as ActivityType | null)?.name ?? '不明',
@@ -104,6 +107,27 @@ export default function UserDetailPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short" })
+  }
+  
+  const formatTime = (timeString: string | null) => {
+    if (!timeString) return null;
+    const [hours, minutes] = timeString.split(':');
+    return `${hours}:${minutes}`;
+  }
+
+  const calculateDuration = (start: string | null, end: string | null) => {
+    if (!start || !end) return null;
+    try {
+      const startDate = new Date(`1970-01-01T${start}`);
+      const endDate = new Date(`1970-01-01T${end}`);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+      const diff = endDate.getTime() - startDate.getTime();
+      if (diff < 0) return null;
+      return Math.floor(diff / (1000 * 60));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_e) { // ▼▼▼ 修正: 未使用変数を _e にし、ESLintルールを無効化 ▼▼▼
+      return null;
+    }
   }
 
   if (loading) {
@@ -155,47 +179,66 @@ export default function UserDetailPage() {
                 <div className="text-center py-8 text-gray-500">まだ活動記録がありません</div>
               ) : (
                 <div className="space-y-6">
-                  {activities.map((activity) => (
-                    <div key={activity.id} className="border-l-4 pl-4" style={{ borderColor: activity.activity_type_color || '#cccccc' }}>
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-2 gap-2">
-                        <div className="flex items-center space-x-2"><Badge variant="outline" style={{ backgroundColor: (activity.activity_type_color || '#cccccc') + "20", borderColor: activity.activity_type_color || '#cccccc', color: activity.activity_type_color || '#cccccc' }}>{activity.activity_type_name}</Badge><span className="text-sm text-gray-600">担当: {activity.staff_name}</span></div>
-                        <div className="flex items-center text-sm text-gray-500"><Calendar className="h-4 w-4 mr-1" />{formatDate(activity.activity_date)}</div>
-                      </div>
-                      
-                      {activity.content ? (
-                        <p className="text-gray-900 mb-3 whitespace-pre-wrap">{activity.content}</p>
-                      ) : (
-                        <p className="text-gray-500 italic mb-3">（活動内容は記入されていません）</p>
-                      )}
-
-                      {activity.has_next_appointment && activity.next_appointment_date && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                          <div className="flex items-center mb-1"><Calendar className="h-4 w-4 text-blue-600 mr-1" /><span className="text-sm font-medium text-blue-800">次回予定: {formatDate(activity.next_appointment_date)}</span></div>
-                          {activity.next_appointment_content && (<p className="text-sm text-blue-700 whitespace-pre-wrap">{activity.next_appointment_content}</p>)}
+                  {activities.map((activity) => {
+                    const duration = calculateDuration(activity.start_time, activity.end_time);
+                    return (
+                      <div key={activity.id} className="border-l-4 pl-4" style={{ borderColor: activity.activity_type_color || '#cccccc' }}>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-2 gap-2">
+                          <div className="flex items-center space-x-2"><Badge variant="outline" style={{ backgroundColor: (activity.activity_type_color || '#cccccc') + "20", borderColor: activity.activity_type_color || '#cccccc', color: activity.activity_type_color || '#cccccc' }}>{activity.activity_type_name}</Badge><span className="text-sm text-gray-600">担当: {activity.staff_name}</span></div>
+                          <div className="flex items-center text-sm text-gray-500 flex-wrap">
+                            <div className="flex items-center mr-2">
+                              <Calendar className="h-4 w-4 mr-1" />
+                              <span>{formatDate(activity.activity_date)}</span>
+                            </div>
+                            {(activity.start_time || activity.end_time) && (
+                              <span className="font-mono text-xs sm:text-sm">
+                                {formatTime(activity.start_time) || '...'} - {formatTime(activity.end_time) || '...'}
+                              </span>
+                            )}
+                            {duration !== null && (
+                              <span className="ml-2 flex items-center text-xs text-blue-600 font-semibold bg-blue-100 px-1.5 py-0.5 rounded-full">
+                                <Hourglass className="h-3 w-3 mr-1"/>
+                                {duration}分
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div className="flex justify-end items-center space-x-2">
-                        <Link href={`/record/${activity.id}/edit`}>
-                          <Button variant="outline" size="sm"><Pencil className="h-3 w-3 mr-1.5"/>編集</Button>
-                        </Link>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm"><Trash2 className="h-3 w-3 mr-1.5"/>削除</Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>本当に削除しますか？</AlertDialogTitle>
-                              <AlertDialogDescription>この操作は元に戻せません。この活動記録はデータベースから完全に削除されます。</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(activity.id)}>はい、削除します</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        
+                        {activity.content ? (
+                          <p className="text-gray-900 mb-3 whitespace-pre-wrap">{activity.content}</p>
+                        ) : (
+                          <p className="text-gray-500 italic mb-3">（活動内容は記入されていません）</p>
+                        )}
+
+                        {activity.has_next_appointment && activity.next_appointment_date && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                            <div className="flex items-center mb-1"><Calendar className="h-4 w-4 text-blue-600 mr-1" /><span className="text-sm font-medium text-blue-800">次回予定: {formatDate(activity.next_appointment_date)}</span></div>
+                            {activity.next_appointment_content && (<p className="text-sm text-blue-700 whitespace-pre-wrap">{activity.next_appointment_content}</p>)}
+                          </div>
+                        )}
+                        <div className="flex justify-end items-center space-x-2">
+                          <Link href={`/record/${activity.id}/edit`}>
+                            <Button variant="outline" size="sm"><Pencil className="h-3 w-3 mr-1.5"/>編集</Button>
+                          </Link>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm"><Trash2 className="h-3 w-3 mr-1.5"/>削除</Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>本当に削除しますか？</AlertDialogTitle>
+                                <AlertDialogDescription>この操作は元に戻せません。この活動記録はデータベースから完全に削除されます。</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(activity.id)}>はい、削除します</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
