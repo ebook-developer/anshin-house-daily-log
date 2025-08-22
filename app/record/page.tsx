@@ -30,7 +30,18 @@ export default function RecordPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ activity_date: new Date().toISOString().split("T")[0], staff_id: "", master_user_uid: "", activity_type_id: "", content: "", has_next_appointment: false, next_appointment_date: "", next_appointment_content: "" })
+  const [formData, setFormData] = useState({
+    activity_date: new Date().toISOString().split("T")[0],
+    start_time: "",
+    end_time: "",
+    staff_id: "",
+    master_user_uid: "",
+    activity_type_id: "",
+    content: "",
+    has_next_appointment: false,
+    next_appointment_date: "",
+    next_appointment_content: ""
+  })
   const [popoverOpen, setPopoverOpen] = useState(false)
 
   useEffect(() => {
@@ -41,21 +52,10 @@ export default function RecordPage() {
         
         const fetchMasterUsers = async (): Promise<MasterUser[]> => {
           const apiUrl = process.env.NEXT_PUBLIC_MASTER_DB_API_URL;
-          // ▼▼▼ 修正: apiKeyの定義とチェックを復活 ▼▼▼
           const apiKey = process.env.NEXT_PUBLIC_MASTER_DB_API_KEY;
-          if (!apiUrl || !apiKey) {
-            throw new Error("マスターDBのAPI設定が環境変数にありません。");
-          }
-
-          // ▼▼▼ 修正: headersにAuthorizationを復活 ▼▼▼
-          const response = await fetch(`${apiUrl}/api/v1/users`, {
-            headers: { 'Authorization': `Bearer ${apiKey}` }
-          });
-          
-          if (!response.ok) {
-            // ステータスコードも含めて、より詳細なエラーを投げる
-            throw new Error(`APIからのデータ取得に失敗しました: Status ${response.status}`);
-          }
+          if (!apiUrl || !apiKey) throw new Error("マスターDBのAPI設定が環境変数にありません。");
+          const response = await fetch(`${apiUrl}/api/v1/users`, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+          if (!response.ok) throw new Error(`APIからのデータ取得に失敗しました: Status ${response.status}`);
           return response.json();
         }
 
@@ -89,7 +89,20 @@ export default function RecordPage() {
       const { data: userInLog, error: upsertError } = await supabase.from('users').upsert({ master_uid: formData.master_user_uid, name: masterUsers.find(u => u.uid === formData.master_user_uid)?.name || '不明な利用者' }, { onConflict: 'master_uid' }).select().single();
       if (upsertError) throw upsertError;
       if (!userInLog) throw new Error("利用者情報の同期に失敗しました。");
-      const { error: recordError } = await supabase.from("activity_records").insert([{ user_id: userInLog.id, staff_id: formData.staff_id, activity_type_id: formData.activity_type_id, activity_date: formData.activity_date, content: formData.content, has_next_appointment: formData.has_next_appointment, next_appointment_date: formData.has_next_appointment ? formData.next_appointment_date : null, next_appointment_content: formData.has_next_appointment ? formData.next_appointment_content : null, }])
+      
+      const { error: recordError } = await supabase.from("activity_records").insert([{
+        user_id: userInLog.id,
+        staff_id: formData.staff_id,
+        activity_type_id: formData.activity_type_id,
+        activity_date: formData.activity_date,
+        start_time: formData.start_time || null,
+        end_time: formData.end_time || null,
+        content: formData.content,
+        has_next_appointment: formData.has_next_appointment,
+        next_appointment_date: formData.has_next_appointment ? formData.next_appointment_date : null,
+        next_appointment_content: formData.has_next_appointment ? formData.next_appointment_content : null,
+      }])
+
       if (recordError) throw recordError
       alert("活動記録を保存しました")
       router.push("/")
@@ -125,7 +138,7 @@ export default function RecordPage() {
   }
 
   return (
-    <>
+    <div className="max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold">活動記録の追加</h1>
         <Link href="/">
@@ -136,13 +149,21 @@ export default function RecordPage() {
         <CardHeader><CardTitle className="text-xl sm:text-2xl">新しい活動記録</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2"><Label htmlFor="activity_date">対応日 *</Label><Input id="activity_date" type="date" value={formData.activity_date} onChange={(e) => setFormData({ ...formData, activity_date: e.target.value })} required/></div>
+              <div className="space-y-2"><Label htmlFor="start_time">開始時間</Label><Input id="start_time" type="time" value={formData.start_time} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}/></div>
+              <div className="space-y-2"><Label htmlFor="end_time">終了時間</Label><Input id="end_time" type="time" value={formData.end_time} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}/></div>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-4 ml-1">時間は任意項目です。移動時間は含めず、実際の支援時間を入力してください。</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2"><Label htmlFor="staff_id">担当スタッフ *</Label><Select value={formData.staff_id} onValueChange={(value) => setFormData({ ...formData, staff_id: value })}><SelectTrigger id="staff_id"><SelectValue placeholder="スタッフを選択" /></SelectTrigger><SelectContent>{staff.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent></Select></div>
               <div className="space-y-2"><Label htmlFor="master_user_uid">利用者 *</Label><Popover open={popoverOpen} onOpenChange={setPopoverOpen}><PopoverTrigger asChild><Button id="master_user_uid" variant="outline" role="combobox" className="w-full justify-between font-normal">{formData.master_user_uid ? masterUsers.find((user) => user.uid === formData.master_user_uid)?.name : "利用者を選択"}<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button></PopoverTrigger><PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="利用者を検索..." /><CommandList><CommandEmpty>該当なし</CommandEmpty><CommandGroup>{masterUsers.map((user) => (<CommandItem key={user.uid} value={user.name} onSelect={() => { setFormData({ ...formData, master_user_uid: user.uid }); setPopoverOpen(false); }}><Check className={cn("mr-2 h-4 w-4", formData.master_user_uid === user.uid ? "opacity-100" : "opacity-0")}/>{user.name}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent></Popover></div>
-              <div className="space-y-2"><Label htmlFor="activity_type_id">活動種別 *</Label><Select value={formData.activity_type_id} onValueChange={(value) => setFormData({ ...formData, activity_type_id: value })}><SelectTrigger id="activity_type_id"><SelectValue placeholder="活動種別を選択" /></SelectTrigger><SelectContent>{activityTypes.map((at) => (<SelectItem key={at.id} value={at.id}><div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: at.color || '#cccccc' }}></div>{at.name}</div></SelectItem>))}</SelectContent></Select></div>
+              <div className="md:col-span-2 space-y-2"><Label htmlFor="activity_type_id">活動種別 *</Label><Select value={formData.activity_type_id} onValueChange={(value) => setFormData({ ...formData, activity_type_id: value })}><SelectTrigger id="activity_type_id"><SelectValue placeholder="活動種別を選択" /></SelectTrigger><SelectContent>{activityTypes.map((at) => (<SelectItem key={at.id} value={at.id}><div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: at.color || '#cccccc' }}></div>{at.name}</div></SelectItem>))}</SelectContent></Select></div>
             </div>
-            <div className="space-y-2"><Label htmlFor="content">活動内容 *</Label><Textarea id="content" placeholder="実施した活動の詳細を記入" value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })} rows={4} required/></div>
+            
+            <div className="space-y-2"><Label htmlFor="content">活動内容</Label><Textarea id="content" placeholder="特記事項があれば記入してください（任意）" value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })} rows={4}/></div>
+            
             <div className="space-y-4"><div className="flex items-center space-x-2"><Checkbox id="has_next_appointment" checked={formData.has_next_appointment} onCheckedChange={(checked) => setFormData({ ...formData, has_next_appointment: checked as boolean })}/><Label htmlFor="has_next_appointment">次回対応予定あり</Label></div>
               {formData.has_next_appointment && (<div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6"><div className="space-y-2"><Label htmlFor="next_appointment_date">次回対応日</Label><Input id="next_appointment_date" type="date" value={formData.next_appointment_date} onChange={(e) => setFormData({ ...formData, next_appointment_date: e.target.value })}/></div><div className="space-y-2 md:col-span-2"><Label htmlFor="next_appointment_content">次回対応内容</Label><Textarea id="next_appointment_content" placeholder="次回実施予定の内容を記入" value={formData.next_appointment_content} onChange={(e) => setFormData({ ...formData, next_appointment_content: e.target.value })} rows={2}/></div></div>)}
             </div>
@@ -150,6 +171,6 @@ export default function RecordPage() {
           </form>
         </CardContent>
       </Card>
-    </>
+    </div>
   )
 }

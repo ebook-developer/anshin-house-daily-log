@@ -14,7 +14,6 @@ import { Save, AlertTriangle, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useParams } from "next/navigation"
 
-// 記録追加ページとほぼ同じ型定義
 interface Staff { id: string; name: string; }
 interface ActivityType { id: string; name: string; color: string | null; }
 
@@ -30,33 +29,31 @@ export default function EditRecordPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  // フォームの型を定義
   type FormData = {
     user_id: string;
     activity_date: string;
+    start_time: string | null;
+    end_time: string | null;
     staff_id: string;
     activity_type_id: string;
-    content: string;
+    content: string | null;
     has_next_appointment: boolean;
     next_appointment_date: string | null;
     next_appointment_content: string | null;
   }
   const [formData, setFormData] = useState<FormData | null>(null)
-  const [userName, setUserName] = useState<string>("") // 利用者名は編集不可なので別途保持
+  const [userName, setUserName] = useState<string>("")
 
   const fetchInitialData = useCallback(async () => {
     if (!recordId) return;
     try {
       setLoading(true)
       setError(null)
-
-      // 編集対象の記録と、プルダウン用のマスターデータを並行して取得
       const [recordData, staffData, activityTypesData] = await Promise.all([
         supabase.from("activity_records").select(`*, users (name)`).eq("id", recordId).single(),
         supabase.from("staff").select("id, name").eq("is_active", true).order("name"),
         supabase.from("activity_types").select("id, name, color").eq("is_active", true).order("name"),
       ])
-
       if (recordData.error) throw recordData.error
       if (staffData.error) throw staffData.error
       if (activityTypesData.error) throw activityTypesData.error
@@ -65,6 +62,8 @@ export default function EditRecordPage() {
       setFormData({
         user_id: record.user_id,
         activity_date: record.activity_date,
+        start_time: record.start_time,
+        end_time: record.end_time,
         staff_id: record.staff_id,
         activity_type_id: record.activity_type_id,
         content: record.content,
@@ -73,10 +72,8 @@ export default function EditRecordPage() {
         next_appointment_content: record.next_appointment_content,
       });
       setUserName((record.users as { name: string })?.name || '不明な利用者')
-      
       if (staffData.data) setStaff(staffData.data)
       if (activityTypesData.data) setActivityTypes(activityTypesData.data)
-
     } catch (err: unknown) {
       console.error("データの取得に失敗しました:", err)
       setError(err instanceof Error ? err.message : "データの取得に失敗しました。")
@@ -100,6 +97,8 @@ export default function EditRecordPage() {
           staff_id: formData.staff_id,
           activity_type_id: formData.activity_type_id,
           activity_date: formData.activity_date,
+          start_time: formData.start_time || null,
+          end_time: formData.end_time || null,
           content: formData.content,
           has_next_appointment: formData.has_next_appointment,
           next_appointment_date: formData.has_next_appointment ? formData.next_appointment_date : null,
@@ -108,10 +107,9 @@ export default function EditRecordPage() {
         .eq('id', recordId);
 
       if (updateError) throw updateError
-      
       alert("活動記録を更新しました")
-      router.push(`/user/${formData.user_id}`) // 更新後は利用者詳細ページに戻る
-      router.refresh(); // ページをリフレッシュして最新の情報を表示
+      router.push(`/user/${formData.user_id}`)
+      router.refresh();
     } catch (err) {
       console.error("更新に失敗しました:", err)
       alert("更新に失敗しました。もう一度お試しください。")
@@ -144,7 +142,7 @@ export default function EditRecordPage() {
   }
 
   return (
-    <>
+    <div className="max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold">活動記録の編集</h1>
         <Link href={`/user/${formData.user_id}`}>
@@ -155,13 +153,21 @@ export default function EditRecordPage() {
         <CardHeader><CardTitle className="text-xl sm:text-2xl">記録の修正</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2"><Label htmlFor="activity_date">対応日 *</Label><Input id="activity_date" type="date" value={formData.activity_date} onChange={(e) => setFormData({ ...formData, activity_date: e.target.value })} required/></div>
-              <div className="space-y-2"><Label htmlFor="staff_id">担当スタッフ *</Label><Select value={formData.staff_id} onValueChange={(value) => setFormData({ ...formData, staff_id: value })}><SelectTrigger id="staff_id"><SelectValue placeholder="スタッフを選択" /></SelectTrigger><SelectContent>{staff.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent></Select></div>
-              <div className="space-y-2"><Label>利用者 (編集不可)</Label><Input value={userName} disabled /></div>
-              <div className="space-y-2"><Label htmlFor="activity_type_id">活動種別 *</Label><Select value={formData.activity_type_id} onValueChange={(value) => setFormData({ ...formData, activity_type_id: value })}><SelectTrigger id="activity_type_id"><SelectValue placeholder="活動種別を選択" /></SelectTrigger><SelectContent>{activityTypes.map((at) => (<SelectItem key={at.id} value={at.id}><div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: at.color || '#cccccc' }}></div>{at.name}</div></SelectItem>))}</SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="start_time">開始時間</Label><Input id="start_time" type="time" value={formData.start_time || ""} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}/></div>
+              <div className="space-y-2"><Label htmlFor="end_time">終了時間</Label><Input id="end_time" type="time" value={formData.end_time || ""} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}/></div>
             </div>
-            <div className="space-y-2"><Label htmlFor="content">活動内容 *</Label><Textarea id="content" placeholder="実施した活動の詳細を記入" value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })} rows={4} required/></div>
+            <p className="text-xs text-muted-foreground -mt-4 ml-1">時間は任意項目です。移動時間は含めず、実際の支援時間を入力してください。</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2"><Label>利用者 (編集不可)</Label><Input value={userName} disabled /></div>
+              <div className="space-y-2"><Label htmlFor="staff_id">担当スタッフ *</Label><Select value={formData.staff_id} onValueChange={(value) => setFormData({ ...formData, staff_id: value })}><SelectTrigger id="staff_id"><SelectValue placeholder="スタッフを選択" /></SelectTrigger><SelectContent>{staff.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent></Select></div>
+              <div className="md:col-span-2 space-y-2"><Label htmlFor="activity_type_id">活動種別 *</Label><Select value={formData.activity_type_id} onValueChange={(value) => setFormData({ ...formData, activity_type_id: value })}><SelectTrigger id="activity_type_id"><SelectValue placeholder="活動種別を選択" /></SelectTrigger><SelectContent>{activityTypes.map((at) => (<SelectItem key={at.id} value={at.id}><div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: at.color || '#cccccc' }}></div>{at.name}</div></SelectItem>))}</SelectContent></Select></div>
+            </div>
+
+            <div className="space-y-2"><Label htmlFor="content">活動内容</Label><Textarea id="content" placeholder="特記事項があれば記入してください（任意）" value={formData.content || ""} onChange={(e) => setFormData({ ...formData, content: e.target.value })} rows={4}/></div>
+            
             <div className="space-y-4"><div className="flex items-center space-x-2"><Checkbox id="has_next_appointment" checked={formData.has_next_appointment} onCheckedChange={(checked) => setFormData({ ...formData, has_next_appointment: checked as boolean })}/><Label htmlFor="has_next_appointment">次回対応予定あり</Label></div>
               {formData.has_next_appointment && (<div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6"><div className="space-y-2"><Label htmlFor="next_appointment_date">次回対応日</Label><Input id="next_appointment_date" type="date" value={formData.next_appointment_date || ""} onChange={(e) => setFormData({ ...formData, next_appointment_date: e.target.value })}/></div><div className="space-y-2 md:col-span-2"><Label htmlFor="next_appointment_content">次回対応内容</Label><Textarea id="next_appointment_content" placeholder="次回実施予定の内容を記入" value={formData.next_appointment_content || ""} onChange={(e) => setFormData({ ...formData, next_appointment_content: e.target.value })} rows={2}/></div></div>)}
             </div>
@@ -169,6 +175,6 @@ export default function EditRecordPage() {
           </form>
         </CardContent>
       </Card>
-    </>
+    </div>
   )
 }

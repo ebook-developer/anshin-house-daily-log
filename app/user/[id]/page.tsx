@@ -1,3 +1,4 @@
+//app/user/[id]/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -5,10 +6,8 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-// ▼▼▼ 修正: useRouter をインポート文から削除 ▼▼▼
 import { User, Calendar, Clock, AlertTriangle, ExternalLink, Pencil, Trash2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
-// ▼▼▼ 修正: useParams のみインポート ▼▼▼
 import { useParams } from "next/navigation"
 import type { Database } from "@/lib/database.types"
 import {
@@ -24,15 +23,24 @@ import {
 } from "@/components/ui/alert-dialog"
 
 interface UserDetail { id: string; name: string; master_uid: string | null; }
-interface ActivityRecord { id: string; activity_date: string; content: string; staff_name: string; activity_type_name: string; activity_type_color: string | null; has_next_appointment: boolean; next_appointment_date: string | null; next_appointment_content: string | null; }
+interface ActivityRecord {
+  id: string
+  activity_date: string
+  content: string | null
+  staff_name: string
+  activity_type_name: string
+  activity_type_color: string | null
+  has_next_appointment: boolean
+  next_appointment_date: string | null
+  next_appointment_content: string | null
+}
+
 type Staff = Database['public']['Tables']['staff']['Row']
 type ActivityType = Database['public']['Tables']['activity_types']['Row']
 
 export default function UserDetailPage() {
   const supabase = createClient()
   const params = useParams()
-  // ▼▼▼ 修正: 未使用の router の定義を削除 ▼▼▼
-  // const router = useRouter() 
   const userId = params.id as string
   const [user, setUser] = useState<UserDetail | null>(null)
   const [activities, setActivities] = useState<ActivityRecord[]>([])
@@ -153,7 +161,13 @@ export default function UserDetailPage() {
                         <div className="flex items-center space-x-2"><Badge variant="outline" style={{ backgroundColor: (activity.activity_type_color || '#cccccc') + "20", borderColor: activity.activity_type_color || '#cccccc', color: activity.activity_type_color || '#cccccc' }}>{activity.activity_type_name}</Badge><span className="text-sm text-gray-600">担当: {activity.staff_name}</span></div>
                         <div className="flex items-center text-sm text-gray-500"><Calendar className="h-4 w-4 mr-1" />{formatDate(activity.activity_date)}</div>
                       </div>
-                      <p className="text-gray-900 mb-3 whitespace-pre-wrap">{activity.content}</p>
+                      
+                      {activity.content ? (
+                        <p className="text-gray-900 mb-3 whitespace-pre-wrap">{activity.content}</p>
+                      ) : (
+                        <p className="text-gray-500 italic mb-3">（活動内容は記入されていません）</p>
+                      )}
+
                       {activity.has_next_appointment && activity.next_appointment_date && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                           <div className="flex items-center mb-1"><Calendar className="h-4 w-4 text-blue-600 mr-1" /><span className="text-sm font-medium text-blue-800">次回予定: {formatDate(activity.next_appointment_date)}</span></div>

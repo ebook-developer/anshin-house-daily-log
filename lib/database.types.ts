@@ -44,39 +44,45 @@ export type Database = {
         Row: {
           activity_date: string
           activity_type_id: string
-          content: string
+          content: string | null
           created_at: string
+          end_time: string | null
           has_next_appointment: boolean | null
           id: string
           next_appointment_content: string | null
           next_appointment_date: string | null
           staff_id: string
+          start_time: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           activity_date: string
           activity_type_id: string
-          content: string
+          content?: string | null
           created_at?: string
+          end_time?: string | null
           has_next_appointment?: boolean | null
           id?: string
           next_appointment_content?: string | null
           next_appointment_date?: string | null
           staff_id: string
+          start_time?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           activity_date?: string
           activity_type_id?: string
-          content?: string
+          content?: string | null
           created_at?: string
+          end_time?: string | null
           has_next_appointment?: boolean | null
           id?: string
           next_appointment_content?: string | null
           next_appointment_date?: string | null
           staff_id?: string
+          start_time?: string | null
           updated_at?: string
           user_id?: string
         }

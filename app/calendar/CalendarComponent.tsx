@@ -1,3 +1,4 @@
+//app/calendar/CalendarComponent.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -23,7 +24,7 @@ type ActivityRecordType = Database['public']['Tables']['activity_types']['Row']
 interface ActivityRecord {
   id: string
   activity_date: string
-  content: string
+  content: string | null
   user_id: string
   user_name: string
   staff_name: string
@@ -189,7 +190,6 @@ export default function CalendarComponent() {
                 <div key={index} className={`relative p-2 border-b border-r border-gray-200 ${!day.isCurrentMonth ? "bg-gray-50" : "bg-white"}`}>
                   <div className={`text-xs sm:text-sm font-medium mb-1 ${!day.isCurrentMonth ? "text-gray-400" : index % 7 === 0 ? "text-red-600" : index % 7 === 6 ? "text-blue-600" : "text-gray-900"} ${day.date.toDateString() === new Date().toDateString() ? "bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center" : ""}`}>{day.date.getDate()}</div>
                   <div className="space-y-1">
-                    {/* ▼▼▼▼▼▼▼▼▼▼ ここからが修正箇所です ▼▼▼▼▼▼▼▼▼▼ */}
                     {day.activities.slice(0, 2).map((activity) => (
                       <DialogTrigger key={activity.id} asChild onClick={() => setSelectedDayActivities(day.activities)}>
                         <div className="text-xs p-1 rounded truncate cursor-pointer hover:bg-gray-100" style={{ backgroundColor: (activity.activity_type_color || '#cccccc') + "20", borderLeft: `3px solid ${activity.activity_type_color || '#cccccc'}`}} title={`${activity.user_name} - ${activity.staff_name}`}>
@@ -205,7 +205,6 @@ export default function CalendarComponent() {
                         </div>
                       </DialogTrigger>
                     )}
-                    {/* ▲▲▲▲▲▲▲▲▲▲ ここまでが修正箇所です ▲▲▲▲▲▲▲▲▲▲ */}
                   </div>
                 </div>
               ))}
@@ -238,7 +237,7 @@ export default function CalendarComponent() {
                     <p className="text-sm text-gray-600 mt-1">担当: {activity.staff_name}</p>
                   </div>
                 </div>
-                <p className="text-gray-800 mt-2 bg-gray-50 p-2 rounded-md">{activity.content}</p>
+                <p className="text-gray-800 mt-2 bg-gray-50 p-2 rounded-md">{activity.content || '(内容は記入されていません)'}</p>
               </div>
             ))}
           </div>
