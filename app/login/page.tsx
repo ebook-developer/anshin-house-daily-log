@@ -1,25 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-// ▼▼▼ 修正: useRouter をインポート文から削除 ▼▼▼
-// import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { ShieldAlert } from 'lucide-react' // アイコンを追加
 
 export default function LoginPage() {
-  // ▼▼▼ 修正: 未使用の router の定義を削除 ▼▼▼
-  // const router = useRouter()
   const supabase = createClient()
-
-  // Supabaseに登録した共有アカウントのメールアドレス
   const TEAM_EMAIL = 'ebookcloud.developer@gmail.com'
-
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // ▼▼▼ 環境変数からメンテナンスモードの状態を読み込む ▼▼▼
+  const isMaintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === 'true';
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -44,6 +41,32 @@ export default function LoginPage() {
     window.location.href = '/'
   }
 
+  // ▼▼▼ メンテナンスモードの場合の表示を定義 ▼▼▼
+  if (isMaintenanceMode) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <div className="mx-auto bg-yellow-100 rounded-full p-3 w-fit">
+              <ShieldAlert className="h-8 w-8 text-yellow-500" />
+            </div>
+            <CardTitle className="text-2xl font-bold mt-4">システムメンテナンスのお知らせ</CardTitle>
+            <CardDescription className="pt-2">
+              現在、新機能追加のためのシステムメンテナンスを実施しております。<br />
+              ご不便をおかけいたしますが、作業完了まで今しばらくお待ちください。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              完了予定: 8月XX日 XX:XX頃
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // ▼▼▼ 通常時の表示 ▼▼▼
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
