@@ -11,7 +11,7 @@ import { Plus, UserCheck, Tag, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 
 interface Staff { id: string; name: string; email: string | null; is_active: boolean | null; }
-interface ActivityType { id: string; name: string; color: string | null; is_active: boolean | null; }
+interface ActivityType { id: string; name: string; is_active: boolean | null; }
 
 export default function SettingsPage() {
   const supabase = createClient()
@@ -20,7 +20,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newStaff, setNewStaff] = useState({ name: "", email: "" })
-  const [newActivityType, setNewActivityType] = useState({ name: "", color: "#3B82F6" })
+  const [newActivityType, setNewActivityType] = useState({ name: "" })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -29,7 +29,7 @@ export default function SettingsPage() {
         setError(null)
         const [staffData, activityTypesData] = await Promise.all([
           supabase.from("staff").select("*").order("name"),
-          supabase.from("activity_types").select("*").order("name"),
+          supabase.from("activity_types").select("id, name, is_active").order("name"),
         ])
         if (staffData.error) throw staffData.error
         if (activityTypesData.error) throw activityTypesData.error
@@ -64,9 +64,9 @@ export default function SettingsPage() {
   const addActivityType = async () => {
     if (!newActivityType.name.trim()) { alert("活動種別名は必須です。"); return; }
     try {
-      const { data, error } = await supabase.from("activity_types").insert([{ name: newActivityType.name.trim(), color: newActivityType.color }]).select();
+      const { data, error } = await supabase.from("activity_types").insert([{ name: newActivityType.name.trim() }]).select("id, name, is_active");
       if (error) throw error
-      setNewActivityType({ name: "", color: "#3B82F6" })
+      setNewActivityType({ name: "" })
       setActivityTypes(prev => [...prev, ...data as ActivityType[]].sort((a, b) => a.name.localeCompare(b.name)));
       alert("活動種別を追加しました")
     } catch (err) {
@@ -164,14 +164,10 @@ export default function SettingsPage() {
           <Card>
             <CardHeader><CardTitle className="text-xl sm:text-2xl">新しい活動種別の追加</CardTitle></CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                 <div className="space-y-2">
                   <Label htmlFor="activity-type-name">活動種別名 *</Label>
                   <Input id="activity-type-name" value={newActivityType.name} onChange={(e) => setNewActivityType({ ...newActivityType, name: e.target.value })} placeholder="定期訪問"/>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="activity-type-color">表示色</Label>
-                  <Input id="activity-type-color" type="color" value={newActivityType.color || '#3B82F6'} onChange={(e) => setNewActivityType({ ...newActivityType, color: e.target.value })} className="w-full h-10"/>
                 </div>
                 <Button onClick={addActivityType} className="w-full"><Plus className="h-4 w-4 mr-2" />追加</Button>
               </div>
@@ -183,7 +179,7 @@ export default function SettingsPage() {
               <div className="space-y-3">
                 {activityTypes.map((at) => (
                   <div key={at.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg gap-2">
-                    <div className="flex items-center"><div className="w-4 h-4 rounded-full mr-3" style={{ backgroundColor: at.color || '#cccccc' }}></div><h3 className="font-medium">{at.name}</h3></div>
+                    <h3 className="font-medium">{at.name}</h3>
                     <div className="flex items-center space-x-2"><span className={`px-2 py-1 text-xs rounded-full ${at.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>{at.is_active ? "有効" : "無効"}</span><Button variant="outline" size="sm" onClick={() => toggleActivityTypeStatus(at.id, at.is_active)}>{at.is_active ? "無効化" : "有効化"}</Button></div>
                   </div>
                 ))}

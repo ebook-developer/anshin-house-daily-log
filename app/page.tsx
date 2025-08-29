@@ -6,54 +6,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-// ▼▼▼ 修正: 未使用の Calendar をインポート文から削除 ▼▼▼
-import { Clock, AlertTriangle, Users, BarChart as BarChartIcon, PieChart as PieChartIcon, Hourglass } from "lucide-react"
+import { Clock, AlertTriangle, Users, BarChart as BarChartIcon, PieChart as PieChartIcon, Hourglass, ListTodo, CheckCircle2, Calendar } from "lucide-react"
 import Link from "next/link"
 import MiniCalendar from "@/components/MiniCalendar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Bar, BarChart, Pie, PieChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, Cell, CartesianGrid } from "recharts"
+import type { Database } from "@/lib/database.types"
+import { cn } from "@/lib/utils"
 
-interface UserWithLastActivity {
-  id: string
-  name: string
-  master_uid: string | null
-  last_activity_staff_name: string | null
-  last_activity_date: string | null
-  days_elapsed: number
-  is_overdue: boolean
-}
-
-interface Staff {
-  id: string
-  name: string
-}
-
-interface FullActivityRecord {
-  start_time: string | null;
-  end_time: string | null;
-  staff: { name: string } | null;
-  activity_types: { name: string, color: string | null } | null;
-}
-
-interface StaffActivityData {
-  name: string;
-  "活動件数": number;
-  "合計時間 (分)": number;
-}
-
-interface ActivityTypeData {
-  name: string;
-  value: number;
-  color: string;
-}
-
-interface ActivityTypeTimeData {
-  name: string;
-  "合計時間 (分)": number;
-  color: string;
-}
-
+// --- 型定義 ---
+interface UserWithLastActivity { id: string; name: string; master_uid: string | null; last_activity_staff_name: string | null; last_activity_date: string | null; days_elapsed: number; is_overdue: boolean; }
+interface Staff { id: string; name: string; }
+interface FullActivityRecord { start_time: string | null; end_time: string | null; staff: { name: string } | null; activity_types: { name: string, color: string | null } | null; }
+interface StaffActivityData { name: string; "活動件数": number; "合計時間 (分)": number; }
+interface ActivityTypeData { name: string; value: number; color: string; }
+interface ActivityTypeTimeData { name: string; "合計時間 (分)": number; color: string; }
 type TimeRange = 'this_month' | 'last_month' | 'last_3_months';
+type UncompletedTask = Database['public']['Tables']['activity_records']['Row'] & {
+  users: { name: string, id: string } | null;
+  staff: { name: string } | null;
+  activity_types: { name: string } | null;
+}
 
 export default function Dashboard() {
   const supabase = createClient()
@@ -69,6 +42,7 @@ export default function Dashboard() {
   const [activityTypeData, setActivityTypeData] = useState<ActivityTypeData[]>([])
   const [activityTypeTimeData, setActivityTypeTimeData] = useState<ActivityTypeTimeData[]>([])
   const [loadingAnalytics, setLoadingAnalytics] = useState(true)
+  const [uncompletedTasks, setUncompletedTasks] = useState<UncompletedTask[]>([]);
 
   const dateRange = useMemo(() => {
     const today = new Date();
@@ -98,15 +72,31 @@ export default function Dashboard() {
       try {
         setLoading(true);
         setError(null)
-        const { data: staffData, error: staffError } = await supabase.from("staff").select("id, name").eq("is_active", true).order("name")
+        
+        const [staffRes, usersRes, tasksRes] = await Promise.all([
+          supabase.from("staff").select("id, name").eq("is_active", true).order("name"),
+          supabase.from("users").select("id, name, master_uid").eq("is_active", true).order("name"),
+          supabase.from("activity_records")
+            .select(`*, users ( id, name ), staff ( name ), activity_types ( name )`)
+            .eq('is_completed', false)
+            .order('activity_date', { ascending: true })
+        ]);
+
+        const { data: staffData, error: staffError } = staffRes;
+        const { data: usersData, error: usersError } = usersRes;
+        const { data: tasksData, error: tasksError } = tasksRes;
+
         if (staffError) throw staffError
-        if (staffData) setStaff(staffData)
-        const { data: usersData, error: usersError } = await supabase.from("users").select("id, name, master_uid").eq("is_active", true).order("name")
         if (usersError) throw usersError
+        if (tasksError) throw tasksError
+
+        if (staffData) setStaff(staffData)
+        if (tasksData) setUncompletedTasks(tasksData as UncompletedTask[]);
+
         if (usersData) {
           const usersWithActivity = await Promise.all(
             usersData.map(async (user) => {
-              const { data: lastActivity } = await supabase.from("activity_records").select("activity_date, staff:staff_id(name)").eq("user_id", user.id).order("activity_date", { ascending: false }).limit(1).single();
+              const { data: lastActivity } = await supabase.from("activity_records").select("activity_date, staff:staff_id(name)").eq("user_id", user.id).eq('is_completed', true).order("activity_date", { ascending: false }).limit(1).single();
               const staffName = (lastActivity?.staff as { name: string } | null)?.name || null
               const lastActivityDate = lastActivity?.activity_date || null
               const daysElapsed = lastActivityDate ? Math.floor((new Date().getTime() - new Date(lastActivityDate).getTime()) / (1000 * 60 * 60 * 24)) : 999
@@ -154,7 +144,6 @@ export default function Dashboard() {
           const typeColor = record.activity_types?.color || '#cccccc';
           let duration = 0;
           if (record.start_time && record.end_time) {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             try {
               const start = new Date(`1970-01-01T${record.start_time}`);
               const end = new Date(`1970-01-01T${record.end_time}`);
@@ -200,6 +189,28 @@ export default function Dashboard() {
     }
   }, [selectedStaffId, users, supabase])
 
+  const handleAssignTask = async (taskId: string, newStaffId: string) => {
+    const originalTasks = [...uncompletedTasks];
+    setUncompletedTasks(tasks => tasks.map(t => t.id === taskId ? {...t, staff_id: newStaffId, staff: {name: staff.find(s => s.id === newStaffId)?.name || '未定'}} : t));
+    
+    const { error } = await supabase.from('activity_records').update({ staff_id: newStaffId }).eq('id', taskId);
+    if (error) {
+      alert("担当者の更新に失敗しました。");
+      setUncompletedTasks(originalTasks);
+    }
+  };
+
+  const handleCompleteTask = async (taskId: string) => {
+    const originalTasks = [...uncompletedTasks];
+    setUncompletedTasks(tasks => tasks.filter(t => t.id !== taskId));
+
+    const { error } = await supabase.from('activity_records').update({ is_completed: true }).eq('id', taskId);
+    if (error) {
+      alert("タスクの完了処理に失敗しました。");
+      setUncompletedTasks(originalTasks);
+    }
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "記録なし"
     return new Date(dateString).toLocaleDateString("ja-JP")
@@ -237,30 +248,79 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="border rounded-lg p-4">
-          <h3 className="text-sm font-medium text-muted-foreground">総利用者数</h3>
-          <p className="text-2xl font-bold">{users.length}名</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="lg:col-span-2">
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center text-lg font-semibold text-amber-800">
+                <ListTodo className="h-5 w-5 mr-3 flex-shrink-0" />
+                <span>チームの未完了タスク ({uncompletedTasks.length}件)</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {uncompletedTasks.length > 0 ? (
+                <div className="space-y-3">
+                  {uncompletedTasks.map(task => {
+                    const today = new Date(); today.setHours(0,0,0,0);
+                    const dueDate = new Date(task.activity_date);
+                    const isOverdue = dueDate < today;
+                    const isToday = dueDate.getTime() === today.getTime();
+
+                    return (
+                      <div key={task.id} className={cn("flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 rounded-md border", isOverdue ? "bg-red-50 border-red-200" : "bg-card")}>
+                        <Link href={`/user/${task.users?.id}`} className="flex-1 space-y-1 group">
+                          <div className="flex items-center gap-2">
+                            {isOverdue && <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />}
+                            <p className={cn("font-semibold group-hover:underline", isOverdue && "text-destructive font-bold")}>{task.users?.name}</p>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{task.activity_types?.name} - {task.content || '(詳細なし)'}</p>
+                          <div className={cn(
+                            "text-xs font-semibold flex items-center gap-1.5",
+                            isOverdue && "text-destructive",
+                            isToday && "text-blue-600",
+                            !isOverdue && !isToday && "text-muted-foreground"
+                          )}>
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>期限: {formatDate(task.activity_date)}</span>
+                            {task.task_time && <span>{task.task_time.slice(0, 5)}</span>}
+                          </div>
+                        </Link>
+                        <div className="flex items-center gap-2 w-full sm:w-auto self-stretch sm:self-center">
+                          <Select
+                            value={task.staff_id || undefined}
+                            onValueChange={(newStaffId) => handleAssignTask(task.id, newStaffId)}
+                          >
+                            <SelectTrigger className="w-full sm:w-40 h-9">
+                              <SelectValue placeholder="担当者を割当..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {staff.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                          <Button size="icon" className="h-9 w-9 bg-green-500 hover:bg-green-600 flex-shrink-0" onClick={() => handleCompleteTask(task.id)} title="このタスクを完了する">
+                            <CheckCircle2 className="h-5 w-5" />
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <CheckCircle2 className="h-10 w-10 mx-auto text-green-500 mb-2" />
+                  <p className="font-semibold">素晴らしい！</p>
+                  <p>未完了のタスクはありません。</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
-        <div className="border rounded-lg p-4">
-          <h3 className="text-sm font-medium text-muted-foreground">要注意利用者</h3>
-          <p className="text-2xl font-bold text-red-600">{users.filter((u) => u.is_overdue).length}名</p>
-          <p className="text-xs text-muted-foreground">90日以上未接触</p>
-        </div>
-        <div className="border rounded-lg p-4">
-          <h3 className="text-sm font-medium text-muted-foreground">今日の日付</h3>
-          <p className="text-2xl font-bold">{new Date().toLocaleDateString("ja-JP")}</p>
-        </div>
-        <div className="border rounded-lg p-4 flex flex-col justify-center">
-            <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
-              <SelectTrigger>
-                <SelectValue placeholder="担当者で絞り込み" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべての担当者</SelectItem>
-                {staff.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-              </SelectContent>
-            </Select>
+        <div className="lg:col-span-1 space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">要注意利用者</CardTitle><AlertTriangle className="h-4 w-4 text-red-500" /></CardHeader>
+            <CardContent><div className="text-2xl font-bold text-red-600">{users.filter((u) => u.is_overdue).length}名</div><p className="text-xs text-muted-foreground">90日以上未接触</p></CardContent>
+          </Card>
+          <MiniCalendar />
         </div>
       </div>
       
@@ -271,36 +331,43 @@ export default function Dashboard() {
         </TabsList>
 
         <TabsContent value="care_status" className="mt-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center text-lg"><Clock className="h-5 w-5 mr-2" />利用者一覧（経過日数順）</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {filteredUsers.length > 0 ? (
-                      filteredUsers.map((user) => (
-                        <Link key={user.id} href={`/user/${user.id}`}>
-                          <div className={`p-4 rounded-lg border transition-colors hover:bg-gray-50 cursor-pointer ${user.is_overdue ? "border-red-200 bg-red-50" : "border-gray-200"}`}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1"><div className="flex items-center"><h3 className="font-medium text-gray-900">{user.name}</h3>{getDaysElapsedBadge(user.days_elapsed, user.is_overdue)}{user.is_overdue && <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />}</div><div className="mt-1 text-sm text-gray-600"><span>最終記録者: {user.last_activity_staff_name || "記録なし"}</span><span className="mx-2">•</span><span>最終活動: {formatDate(user.last_activity_date)}</span></div></div>
-                              <div className="text-right"><div className="text-lg font-semibold text-gray-900">{user.days_elapsed === 999 ? "---" : `${user.days_elapsed}日`}</div><div className="text-xs text-gray-500">経過</div></div>
-                            </div>
-                          </div>
-                        </Link>
-                      ))
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">該当する利用者がいません</div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="lg:col-span-1">
-              <MiniCalendar />
-            </div>
-          </div>
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle className="flex items-center text-lg"><Clock className="h-5 w-5 mr-2" />利用者一覧（経過日数順）</CardTitle>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm font-medium whitespace-nowrap">担当者で絞り込み:</label>
+                  <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+                    <SelectTrigger className="w-auto sm:w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">すべて</SelectItem>
+                      {staff.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {filteredUsers.length > 0 ? (
+                  filteredUsers.map((user) => (
+                    <Link key={user.id} href={`/user/${user.id}`}>
+                      <div className={`p-4 rounded-lg border transition-colors hover:bg-gray-50 cursor-pointer ${user.is_overdue ? "border-red-200 bg-red-50" : "border-gray-200"}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1"><div className="flex items-center"><h3 className="font-medium text-gray-900">{user.name}</h3>{getDaysElapsedBadge(user.days_elapsed, user.is_overdue)}{user.is_overdue && <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />}</div><div className="mt-1 text-sm text-gray-600"><span>最終記録者: {user.last_activity_staff_name || "記録なし"}</span><span className="mx-2">•</span><span>最終活動: {formatDate(user.last_activity_date)}</span></div></div>
+                          <div className="text-right"><div className="text-lg font-semibold text-gray-900">{user.days_elapsed === 999 ? "---" : `${user.days_elapsed}日`}</div><div className="text-xs text-gray-500">経過</div></div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">該当する利用者がいません</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-6 space-y-8">

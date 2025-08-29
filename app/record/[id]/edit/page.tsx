@@ -3,19 +3,21 @@
 import type React from "react"
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Save, AlertTriangle, ArrowLeft } from "lucide-react"
+import { Save, AlertTriangle, ArrowLeft, ClipboardCheck, ClipboardPlus, Info } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useParams } from "next/navigation"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface Staff { id: string; name: string; }
-interface ActivityType { id: string; name: string; color: string | null; }
+interface ActivityType { id: string; name: string; }
+type FormMode = "record" | "task";
 
 export default function EditRecordPage() {
   const supabase = createClient()
@@ -34,12 +36,11 @@ export default function EditRecordPage() {
     activity_date: string;
     start_time: string | null;
     end_time: string | null;
-    staff_id: string;
+    task_time: string | null;
+    staff_id: string | null;
     activity_type_id: string;
     content: string | null;
-    has_next_appointment: boolean;
-    next_appointment_date: string | null;
-    next_appointment_content: string | null;
+    is_completed: boolean;
   }
   const [formData, setFormData] = useState<FormData | null>(null)
   const [userName, setUserName] = useState<string>("")
@@ -52,7 +53,7 @@ export default function EditRecordPage() {
       const [recordData, staffData, activityTypesData] = await Promise.all([
         supabase.from("activity_records").select(`*, users (name)`).eq("id", recordId).single(),
         supabase.from("staff").select("id, name").eq("is_active", true).order("name"),
-        supabase.from("activity_types").select("id, name, color").eq("is_active", true).order("name"),
+        supabase.from("activity_types").select("id, name").eq("is_active", true).order("name"),
       ])
       if (recordData.error) throw recordData.error
       if (staffData.error) throw staffData.error
@@ -64,16 +65,15 @@ export default function EditRecordPage() {
         activity_date: record.activity_date,
         start_time: record.start_time,
         end_time: record.end_time,
+        task_time: record.task_time,
         staff_id: record.staff_id,
         activity_type_id: record.activity_type_id,
         content: record.content,
-        has_next_appointment: record.has_next_appointment ?? false,
-        next_appointment_date: record.next_appointment_date,
-        next_appointment_content: record.next_appointment_content,
+        is_completed: record.is_completed ?? true,
       });
       setUserName((record.users as { name: string })?.name || '不明な利用者')
       if (staffData.data) setStaff(staffData.data)
-      if (activityTypesData.data) setActivityTypes(activityTypesData.data)
+      if (activityTypesData.data) setActivityTypes(activityTypesData.data as ActivityType[])
     } catch (err: unknown) {
       console.error("データの取得に失敗しました:", err)
       setError(err instanceof Error ? err.message : "データの取得に失敗しました。")
@@ -94,15 +94,14 @@ export default function EditRecordPage() {
       const { error: updateError } = await supabase
         .from("activity_records")
         .update({
-          staff_id: formData.staff_id,
+          staff_id: formData.staff_id || null,
           activity_type_id: formData.activity_type_id,
           activity_date: formData.activity_date,
-          start_time: formData.start_time || null,
-          end_time: formData.end_time || null,
+          start_time: formData.is_completed ? (formData.start_time || null) : null,
+          end_time: formData.is_completed ? (formData.end_time || null) : null,
+          task_time: !formData.is_completed ? (formData.task_time || null) : null,
           content: formData.content,
-          has_next_appointment: formData.has_next_appointment,
-          next_appointment_date: formData.has_next_appointment ? formData.next_appointment_date : null,
-          next_appointment_content: formData.has_next_appointment ? formData.next_appointment_content : null,
+          is_completed: formData.is_completed,
         })
         .eq('id', recordId);
 
@@ -141,36 +140,89 @@ export default function EditRecordPage() {
     )
   }
 
+  const formMode = formData.is_completed ? 'record' : 'task';
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold">活動記録の編集</h1>
-        <Link href={`/user/${formData.user_id}`}>
-          <Button variant="ghost"><ArrowLeft className="h-4 w-4 mr-2" />利用者詳細に戻る</Button>
-        </Link>
+        <Link href={`/user/${formData.user_id}`}><Button variant="ghost"><ArrowLeft className="h-4 w-4 mr-2" />利用者詳細に戻る</Button></Link>
       </div>
       <Card>
-        <CardHeader><CardTitle className="text-xl sm:text-2xl">記録の修正</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="space-y-2">
+            <Label className="text-base font-semibold">記録の種類を選択</Label>
+            <ToggleGroup 
+              type="single" 
+              value={formMode} 
+              onValueChange={(value: FormMode) => {
+                if (value && formData) setFormData({ ...formData, is_completed: value === 'record' })
+              }} 
+              className="grid grid-cols-2 h-auto"
+            >
+              <ToggleGroupItem value="record" className="flex flex-col items-center justify-center h-24 text-sm gap-2 data-[state=on]:bg-blue-100 data-[state=on]:text-blue-800 data-[state=on]:border-blue-300">
+                <ClipboardCheck className="h-6 w-6"/>
+                <span className="font-bold">活動記録</span>
+                <span className="text-xs text-muted-foreground hidden sm:inline">完了済みの活動を修正</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="task" className="flex flex-col items-center justify-center h-24 text-sm gap-2 data-[state=on]:bg-amber-100 data-[state=on]:text-amber-800 data-[state=on]:border-amber-300">
+                <ClipboardPlus className="h-6 w-6"/>
+                <span className="font-bold">未完了タスク</span>
+                <span className="text-xs text-muted-foreground hidden sm:inline">未来の予定を修正</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2"><Label htmlFor="activity_date">対応日 *</Label><Input id="activity_date" type="date" value={formData.activity_date} onChange={(e) => setFormData({ ...formData, activity_date: e.target.value })} required/></div>
-              <div className="space-y-2"><Label htmlFor="start_time">開始時間</Label><Input id="start_time" type="time" value={formData.start_time || ""} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}/></div>
-              <div className="space-y-2"><Label htmlFor="end_time">終了時間</Label><Input id="end_time" type="time" value={formData.end_time || ""} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}/></div>
+              <div className="space-y-2">
+                <Label htmlFor="activity_date">{formMode === 'record' ? '対応日 *' : '対応希望日 *'}</Label>
+                <Input id="activity_date" type="date" value={formData.activity_date} onChange={(e) => setFormData({ ...formData, activity_date: e.target.value })} required/>
+              </div>
+              {formMode === 'record' ? (
+                <>
+                  <div className="space-y-2"><Label htmlFor="start_time">開始時間</Label><Input id="start_time" type="time" value={formData.start_time || ""} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}/></div>
+                  <div className="space-y-2"><Label htmlFor="end_time">終了時間</Label><Input id="end_time" type="time" value={formData.end_time || ""} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}/></div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="task_time">希望時間</Label>
+                  <Input id="task_time" type="time" value={formData.task_time || ""} onChange={(e) => setFormData({ ...formData, task_time: e.target.value })}/>
+                </div>
+              )}
             </div>
-<p className="text-xs text-gray-700 font-medium -mt-4 ml-1">※移動時間は含めず、実際の支援時間を入力してください。</p>
+            {formMode === 'record' && (
+              <Alert variant="default" className="-mt-2">
+                <Info className="h-4 w-4" />
+                <AlertTitle className="font-semibold">時間の入力について</AlertTitle>
+                <AlertDescription className="text-xs">
+                  時間は任意項目です。移動時間は含めず、実際の支援時間を入力してください。<br />
+                  このデータは、将来的に活動ごとの所要時間を分析し、業務改善に役立てるために活用されます。
+                </AlertDescription>
+              </Alert>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2"><Label>利用者 (編集不可)</Label><Input value={userName} disabled /></div>
-              <div className="space-y-2"><Label htmlFor="staff_id">担当スタッフ *</Label><Select value={formData.staff_id} onValueChange={(value) => setFormData({ ...formData, staff_id: value })}><SelectTrigger id="staff_id"><SelectValue placeholder="スタッフを選択" /></SelectTrigger><SelectContent>{staff.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent></Select></div>
-              <div className="md:col-span-2 space-y-2"><Label htmlFor="activity_type_id">活動種別 *</Label><Select value={formData.activity_type_id} onValueChange={(value) => setFormData({ ...formData, activity_type_id: value })}><SelectTrigger id="activity_type_id"><SelectValue placeholder="活動種別を選択" /></SelectTrigger><SelectContent>{activityTypes.map((at) => (<SelectItem key={at.id} value={at.id}><div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: at.color || '#cccccc' }}></div>{at.name}</div></SelectItem>))}</SelectContent></Select></div>
+              <div className="space-y-2">
+                <Label htmlFor="staff_id">{formMode === 'record' ? '担当スタッフ *' : '担当スタッフ (後で割当可)'}</Label>
+                <Select value={formData.staff_id || ""} onValueChange={(value) => setFormData({ ...formData, staff_id: value })}><SelectTrigger id="staff_id"><SelectValue placeholder="スタッフを選択" /></SelectTrigger><SelectContent>{staff.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent></Select>
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="activity_type_id">活動種別 *</Label>
+                <Select value={formData.activity_type_id} onValueChange={(value) => setFormData({ ...formData, activity_type_id: value })}>
+                  <SelectTrigger id="activity_type_id"><SelectValue placeholder="活動種別を選択" /></SelectTrigger>
+                  <SelectContent>{activityTypes.map((at) => (<SelectItem key={at.id} value={at.id}>{at.name}</SelectItem>))}</SelectContent>
+                </Select>
+                 <p className="text-xs text-muted-foreground ml-1">
+                  活動種別は<Link href="/settings" className="underline hover:text-primary">設定ページ</Link>で追加・編集できます。
+                </p>
+              </div>
             </div>
 
-            <div className="space-y-2"><Label htmlFor="content">活動内容</Label><Textarea id="content" placeholder="特記事項があれば記入してください（任意）" value={formData.content || ""} onChange={(e) => setFormData({ ...formData, content: e.target.value })} rows={4}/></div>
+            <div className="space-y-2"><Label htmlFor="content">{formMode === 'record' ? '活動内容' : 'タスクの詳細内容'}</Label><Textarea id="content" placeholder={formMode === 'record' ? "特記事項があれば記入してください（任意）" : "依頼されたタスクの詳細を記入してください"} value={formData.content || ""} onChange={(e) => setFormData({ ...formData, content: e.target.value })} rows={4}/></div>
             
-            <div className="space-y-4"><div className="flex items-center space-x-2"><Checkbox id="has_next_appointment" checked={formData.has_next_appointment} onCheckedChange={(checked) => setFormData({ ...formData, has_next_appointment: checked as boolean })}/><Label htmlFor="has_next_appointment">次回対応予定あり</Label></div>
-              {formData.has_next_appointment && (<div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6"><div className="space-y-2"><Label htmlFor="next_appointment_date">次回対応日</Label><Input id="next_appointment_date" type="date" value={formData.next_appointment_date || ""} onChange={(e) => setFormData({ ...formData, next_appointment_date: e.target.value })}/></div><div className="space-y-2 md:col-span-2"><Label htmlFor="next_appointment_content">次回対応内容</Label><Textarea id="next_appointment_content" placeholder="次回実施予定の内容を記入" value={formData.next_appointment_content || ""} onChange={(e) => setFormData({ ...formData, next_appointment_content: e.target.value })} rows={2}/></div></div>)}
-            </div>
             <div className="flex justify-end space-x-4"><Link href={`/user/${formData.user_id}`}><Button type="button" variant="outline">キャンセル</Button></Link><Button type="submit" disabled={saving}><Save className="h-4 w-4 mr-2" />{saving ? "更新中..." : "更新"}</Button></div>
           </form>
         </CardContent>
