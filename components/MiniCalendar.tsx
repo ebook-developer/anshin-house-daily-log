@@ -1,5 +1,3 @@
-// components/MiniCalendar.tsx
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -34,8 +32,10 @@ export default function MiniCalendar() {
       setLoading(true)
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth()
-      const startDate = new Date(year, month, 1).toISOString().split("T")[0]
-      const endDate = new Date(year, month + 1, 0).toISOString().split("T")[0]
+      
+      // 注意: タイムゾーン問題を避けるため、UTCで日付を生成する
+      const startDate = new Date(Date.UTC(year, month, 1)).toISOString().split("T")[0];
+      const endDate = new Date(Date.UTC(year, month + 1, 0)).toISOString().split("T")[0];
 
       const { data, error } = await supabase
         .from("activity_records")
@@ -67,7 +67,14 @@ export default function MiniCalendar() {
     }
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const date = new Date(year, month, day)
-      const dateString = date.toISOString().split("T")[0]
+
+      // ▼▼▼ 変更点: タイムゾーンの影響を受けないように日付文字列を生成 ▼▼▼
+      const localYear = date.getFullYear();
+      const localMonth = (date.getMonth() + 1).toString().padStart(2, '0');
+      const localDay = date.getDate().toString().padStart(2, '0');
+      const dateString = `${localYear}-${localMonth}-${localDay}`;
+      // ▲▲▲ 変更ここまで ▲▲▲
+
       const dayActivities = activities.filter(a => a.activity_date === dateString)
       days.push({ date, activities: dayActivities })
     }
