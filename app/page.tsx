@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Clock, AlertTriangle, Users, BarChart as BarChartIcon, PieChart as PieChartIcon, Hourglass, ListTodo, CheckCircle2, Calendar } from "lucide-react"
+// ▼ 変更点: 未使用の 'UserIcon' を削除
+import { Clock, AlertTriangle, Users, BarChart as BarChartIcon, PieChart as PieChartIcon, Hourglass, ListTodo, CheckCircle2, Calendar, CalendarDays } from "lucide-react"
 import Link from "next/link"
 import MiniCalendar from "@/components/MiniCalendar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,7 +15,7 @@ import { Bar, BarChart, Pie, PieChart, ResponsiveContainer, XAxis, YAxis, Toolti
 import type { Database } from "@/lib/database.types"
 import { cn } from "@/lib/utils"
 
-// --- 型定義 ---
+// --- 型定義 (変更なし) ---
 interface UserWithLastActivity { id: string; name: string; master_uid: string | null; last_activity_staff_name: string | null; last_activity_date: string | null; days_elapsed: number; is_overdue: boolean; }
 interface Staff { id: string; name: string; }
 interface FullActivityRecord { start_time: string | null; end_time: string | null; staff: { name: string } | null; activity_types: { name: string, color: string | null } | null; }
@@ -251,13 +252,16 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         <div className="lg:col-span-2">
           <Card className="h-full">
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg font-semibold text-amber-800">
-                <ListTodo className="h-5 w-5 mr-3 flex-shrink-0" />
-                <span>チームの未完了タスク ({uncompletedTasks.length}件)</span>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/20 py-4">
+              <CardTitle className="flex items-center text-lg font-semibold">
+                <ListTodo className="h-5 w-5 mr-3 text-primary" />
+                <span>チームの未完了タスク</span>
               </CardTitle>
+              <Badge variant="secondary" className="px-3 py-1 text-base">
+                {uncompletedTasks.length}件
+              </Badge>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               {uncompletedTasks.length > 0 ? (
                 <div className="space-y-3">
                   {uncompletedTasks.map(task => {
@@ -268,21 +272,29 @@ export default function Dashboard() {
 
                     return (
                       <div key={task.id} className={cn("flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 rounded-md border", isOverdue ? "bg-red-50 border-red-200" : "bg-card")}>
-                        <Link href={`/user/${task.users?.id}`} className="flex-1 space-y-1 group">
+                        <Link href={`/user/${task.users?.id}`} className="flex-1 space-y-1.5 group">
                           <div className="flex items-center gap-2">
                             {isOverdue && <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />}
                             <p className={cn("font-semibold group-hover:underline", isOverdue && "text-destructive font-bold")}>{task.users?.name}</p>
                           </div>
                           <p className="text-sm text-muted-foreground">{task.activity_types?.name} - {task.content || '(詳細なし)'}</p>
                           <div className={cn(
-                            "text-xs font-semibold flex items-center gap-1.5",
-                            isOverdue && "text-destructive",
-                            isToday && "text-blue-600",
-                            !isOverdue && !isToday && "text-muted-foreground"
+                            "inline-flex items-center gap-x-2 rounded-md px-2.5 py-1 text-sm font-medium",
+                            isOverdue 
+                              ? "bg-red-100 text-red-800" 
+                              : isToday 
+                                ? "bg-blue-100 text-blue-800" 
+                                : "bg-slate-100 text-slate-800"
                           )}>
-                            <Calendar className="h-3.5 w-3.5" />
-                            <span>期限: {formatDate(task.activity_date)}</span>
-                            {task.task_time && <span>{task.task_time.slice(0, 5)}</span>}
+                            <Calendar className="h-4 w-4 flex-shrink-0" />
+                            <span className="whitespace-nowrap">
+                              {isOverdue ? "期限切れ" : isToday ? "本日対応" : `期限: ${formatDate(task.activity_date)}`}
+                            </span>
+                            {task.task_time && (
+                              <span className="font-mono bg-black/10 px-1.5 py-0.5 rounded-sm text-xs">
+                                {task.task_time.slice(0, 5)}
+                              </span>
+                            )}
                           </div>
                         </Link>
                         <div className="flex items-center gap-2 w-full sm:w-auto self-stretch sm:self-center">
@@ -352,16 +364,43 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-3">
                 {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => (
-                    <Link key={user.id} href={`/user/${user.id}`}>
-                      <div className={`p-4 rounded-lg border transition-colors hover:bg-gray-50 cursor-pointer ${user.is_overdue ? "border-red-200 bg-red-50" : "border-gray-200"}`}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1"><div className="flex items-center"><h3 className="font-medium text-gray-900">{user.name}</h3>{getDaysElapsedBadge(user.days_elapsed, user.is_overdue)}{user.is_overdue && <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />}</div><div className="mt-1 text-sm text-gray-600"><span>最終記録者: {user.last_activity_staff_name || "記録なし"}</span><span className="mx-2">•</span><span>最終活動: {formatDate(user.last_activity_date)}</span></div></div>
-                          <div className="text-right"><div className="text-lg font-semibold text-gray-900">{user.days_elapsed === 999 ? "---" : `${user.days_elapsed}日`}</div><div className="text-xs text-gray-500">経過</div></div>
+                  filteredUsers.map((user) => {
+                    const nextTask = uncompletedTasks.find(task => task.users?.id === user.id);
+
+                    return (
+                      <Link key={user.id} href={`/user/${user.id}`}>
+                        <div className={`p-4 rounded-lg border transition-colors hover:bg-gray-50 cursor-pointer ${user.is_overdue ? "border-red-200 bg-red-50" : "border-gray-200"}`}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 space-y-1.5">
+                              <div className="flex items-center">
+                                <h3 className="font-medium text-gray-900">{user.name}</h3>
+                                {getDaysElapsedBadge(user.days_elapsed, user.is_overdue)}
+                                {user.is_overdue && <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                <span>最終記録者: {user.last_activity_staff_name || "記録なし"}</span>
+                                <span className="mx-2">•</span>
+                                <span>最終活動: {formatDate(user.last_activity_date)}</span>
+                              </div>
+                              {nextTask && (
+                                <div className="flex items-center text-sm text-sky-700 pt-1">
+                                  <CalendarDays className="h-4 w-4 mr-2 flex-shrink-0" />
+                                  <span>
+                                    次回予定: {formatDate(nextTask.activity_date)}
+                                    {nextTask.task_time && ` ${nextTask.task_time.slice(0, 5)}`}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right flex-shrink-0 ml-4">
+                              <div className="text-lg font-semibold text-gray-900">{user.days_elapsed === 999 ? "---" : `${user.days_elapsed}日`}</div>
+                              <div className="text-xs text-gray-500">経過</div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </Link>
-                  ))
+                      </Link>
+                    )
+                  })
                 ) : (
                   <div className="text-center py-8 text-gray-500">該当する利用者がいません</div>
                 )}
