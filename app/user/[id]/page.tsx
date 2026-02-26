@@ -127,7 +127,6 @@ export default function UserDetailPage() {
       const diff = endDate.getTime() - startDate.getTime();
       if (diff < 0) return null;
       return Math.floor(diff / (1000 * 60));
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_e) {
       return null;
     }
