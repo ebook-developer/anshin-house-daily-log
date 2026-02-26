@@ -150,7 +150,6 @@ export default function Dashboard() {
               const end = new Date(`1970-01-01T${record.end_time}`);
               const diff = (end.getTime() - start.getTime()) / (1000 * 60);
               if (diff > 0) duration = diff;
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             } catch (_e) { /* Invalid time format, ignore */ }
           }
 
