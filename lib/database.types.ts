@@ -1,4 +1,3 @@
-
 export type Json =
   | string
   | number
@@ -8,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "12.2.12 (cd3cf9e)"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -96,6 +90,13 @@ export type Database = {
             columns: ["staff_id"]
             isOneToOne: false
             referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_records_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_with_last_activity"
             referencedColumns: ["id"]
           },
           {
@@ -187,7 +188,18 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      user_with_last_activity: {
+        Row: {
+          days_elapsed: number | null
+          id: string | null
+          is_active: boolean | null
+          last_activity_date: string | null
+          last_activity_staff_name: string | null
+          master_uid: string | null
+          name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
@@ -326,3 +338,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
