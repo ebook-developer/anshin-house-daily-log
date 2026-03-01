@@ -10,10 +10,11 @@ import { Separator } from "@/components/ui/separator"
 export default function Header() {
   const pathname = usePathname();
   
-  const masterDbUrl = process.env.NEXT_PUBLIC_MASTER_DB_API_URL || "/";
+  // ▼▼▼ 修正: 環境変数名を変更し、デフォルト値を指定のURLに設定 ▼▼▼
+  // NEXT_PUBLIC_ をつけないと、ブラウザ側（Client Component）で読み込めません
+  const masterDbUrl = process.env.NEXT_PUBLIC_MASTER_DB_URL || "https://anshinhousedb.vercel.app/";
 
   const navLinks = [
-    // ▼▼▼ 修正: 「記録追加」をプライマリアクションとして variant="default" に変更 ▼▼▼
     { href: "/record", label: "記録追加", icon: Plus, variant: "default" as const },
     { href: "/calendar", label: "カレンダー", icon: CalendarDays, variant: "outline" as const },
     { href: "/settings", label: "各種設定", icon: Settings, variant: "outline" as const },
@@ -26,16 +27,22 @@ export default function Header() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900 hover:text-blue-600 transition-colors">
-                {/* ▼▼▼ 修正: Homeアイコンにブランドカラー (青) を適用 ▼▼▼ */}
                 <Home className="h-6 w-6 sm:h-7 sm:w-7 text-blue-600" />
                 <span className="text-lg sm:text-xl">あんしん住宅活動日報</span>
               </Link>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
               
-              <Button asChild variant="ghost" size="sm">
-                <a href={masterDbUrl} target="_blank" rel="noopener noreferrer">
-                  <Database className="h-4 w-4 sm:mr-2" />
+              {/* ▼▼▼ 修正: 安全な外部リンク設定 ▼▼▼ */}
+              {/* Button asChild を使うことで、中の a タグとして機能させます */}
+              <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-blue-600">
+                <a 
+                  href={masterDbUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer" // これがあるため、セキュリティは安全です（Tabnabbing攻撃防止）
+                  className="flex items-center"
+                >
+                  <Database className="h-4 w-4 mr-2" />
                   <span className="hidden sm:inline">利用者マスター</span>
                 </a>
               </Button>
