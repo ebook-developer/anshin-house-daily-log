@@ -1,4 +1,3 @@
-//components/EditRecordForm.tsx
 "use client"
 
 import { useState } from "react"
@@ -8,12 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Save, ArrowLeft, ClipboardCheck, ClipboardPlus, Info } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select"
+import { Save, ArrowLeft, ClipboardCheck, ClipboardPlus } from "lucide-react" // Info を削除
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+
+// Alert 関連の未使用インポートを削除しました
 
 interface Props {
   initialRecord: any
@@ -27,12 +27,10 @@ export function EditRecordForm({ initialRecord, userName, staffList, activityTyp
   const router = useRouter()
   const [saving, setSaving] = useState(false)
 
-  // フォーム状態の初期化 (以前のロジックを完全維持)
   const [formData, setFormData] = useState({
     user_id: initialRecord.user_id,
     activity_date: initialRecord.activity_date,
-    start_time: initialRecord.start_time,
-    end_time: initialRecord.end_time,
+    duration_minutes: initialRecord.duration_minutes || 30,
     task_time: initialRecord.task_time,
     staff_id: initialRecord.staff_id,
     activity_type_id: initialRecord.activity_type_id,
@@ -52,8 +50,9 @@ export function EditRecordForm({ initialRecord, userName, staffList, activityTyp
           staff_id: formData.staff_id || null,
           activity_type_id: formData.activity_type_id,
           activity_date: formData.activity_date,
-          start_time: formData.is_completed ? (formData.start_time || null) : null,
-          end_time: formData.is_completed ? (formData.end_time || null) : null,
+          duration_minutes: formData.is_completed ? formData.duration_minutes : null,
+          start_time: null, 
+          end_time: null,   
           task_time: !formData.is_completed ? (formData.task_time || null) : null,
           content: formData.content,
           is_completed: formData.is_completed,
@@ -61,13 +60,12 @@ export function EditRecordForm({ initialRecord, userName, staffList, activityTyp
         .eq('id', initialRecord.id)
 
       if (updateError) throw updateError
-      
       alert("活動記録を更新しました")
       router.push(`/user/${formData.user_id}`)
       router.refresh()
     } catch (err) {
       console.error("Update failed:", err)
-      alert("更新に失敗しました。もう一度お試しください。")
+      alert("更新に失敗しました。")
     } finally {
       setSaving(false)
     }
@@ -77,30 +75,19 @@ export function EditRecordForm({ initialRecord, userName, staffList, activityTyp
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl sm:text-3xl font-bold">活動記録の編集</h1>
-        <Link href={`/user/${formData.user_id}`}>
-          <Button variant="ghost"><ArrowLeft className="h-4 w-4 mr-2" />戻る</Button>
-        </Link>
+        <Link href={`/user/${formData.user_id}`}><Button variant="ghost"><ArrowLeft className="h-4 w-4 mr-2" />戻る</Button></Link>
       </div>
 
       <Card>
         <CardHeader>
           <div className="space-y-2">
             <Label className="text-base font-semibold">記録の種類</Label>
-            <ToggleGroup 
-              type="single" 
-              value={formMode} 
-              onValueChange={(value) => {
-                if (value) setFormData({ ...formData, is_completed: value === 'record' })
-              }} 
-              className="grid grid-cols-2 gap-4 h-auto"
-            >
+            <ToggleGroup type="single" value={formMode} onValueChange={(value) => { if (value) setFormData({ ...formData, is_completed: value === 'record' }) }} className="grid grid-cols-2 gap-4 h-auto">
               <ToggleGroupItem value="record" className="flex flex-col h-20 gap-1 data-[state=on]:bg-blue-50 data-[state=on]:text-blue-700 data-[state=on]:border-blue-200 border">
-                <ClipboardCheck className="h-5 w-5"/>
-                <span className="font-bold">活動記録</span>
+                <ClipboardCheck className="h-5 w-5"/><span className="font-bold">活動記録</span>
               </ToggleGroupItem>
               <ToggleGroupItem value="task" className="flex flex-col h-20 gap-1 data-[state=on]:bg-amber-50 data-[state=on]:text-amber-700 data-[state=on]:border-amber-200 border">
-                <ClipboardPlus className="h-5 w-5"/>
-                <span className="font-bold">未完了タスク</span>
+                <ClipboardPlus className="h-5 w-5"/><span className="font-bold">未完了タスク</span>
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -108,28 +95,53 @@ export function EditRecordForm({ initialRecord, userName, staffList, activityTyp
 
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="activity_date">{formMode === 'record' ? '対応日 *' : '対応希望日 *'}</Label>
                 <Input id="activity_date" type="date" value={formData.activity_date} onChange={(e) => setFormData({ ...formData, activity_date: e.target.value })} required/>
               </div>
+              
               {formMode === 'record' ? (
-                <>
-                  <div className="space-y-2"><Label htmlFor="start_time">開始時間</Label><Input id="start_time" type="time" value={formData.start_time || ""} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}/></div>
-                  <div className="space-y-2"><Label htmlFor="end_time">終了時間</Label><Input id="end_time" type="time" value={formData.end_time || ""} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}/></div>
-                </>
+                <div className="space-y-2">
+                  <Label htmlFor="duration_minutes">活動時間 (目安) *</Label>
+  <Select value={String(formData.duration_minutes)} onValueChange={(val) => setFormData({ ...formData, duration_minutes: Number(val) })}>
+    <SelectTrigger id="duration_minutes"><SelectValue placeholder="時間を選択" /></SelectTrigger>
+    {/* position="popper" で見切れ防止 */}
+    <SelectContent position="popper" sideOffset={5} className="max-h-[300px]">
+                      <SelectGroup>
+                        <SelectLabel>短時間</SelectLabel>
+                        <SelectItem value="5">5分</SelectItem>
+                        <SelectItem value="10">10分</SelectItem>
+                        <SelectItem value="15">15分</SelectItem>
+                        <SelectItem value="30">30分</SelectItem>
+                        <SelectItem value="45">45分</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                        <SelectLabel>標準的な支援</SelectLabel>
+                        <SelectItem value="60">1時間</SelectItem>
+                        <SelectItem value="90">1時間半 (90分)</SelectItem>
+                        <SelectItem value="120">2時間</SelectItem>
+                        <SelectItem value="150">2時間半 (150分)</SelectItem>
+                        <SelectItem value="180">3時間</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                        <SelectLabel>長時間の支援</SelectLabel>
+                        <SelectItem value="210">3時間半</SelectItem>
+                        <SelectItem value="240">4時間</SelectItem>
+                        <SelectItem value="300">5時間</SelectItem>
+                        <SelectItem value="360">6時間</SelectItem>
+                        <SelectItem value="420">6時間以上 (420分)</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
               ) : (
-                <div className="space-y-2"><Label htmlFor="task_time">希望時間</Label><Input id="task_time" type="time" value={formData.task_time || ""} onChange={(e) => setFormData({ ...formData, task_time: e.target.value })}/></div>
+                <div className="space-y-2">
+                  <Label htmlFor="task_time">希望時間</Label>
+                  <Input id="task_time" type="time" value={formData.task_time || ""} onChange={(e) => setFormData({ ...formData, task_time: e.target.value })}/>
+                </div>
               )}
             </div>
-
-            {formMode === 'record' && (
-              <Alert className="bg-muted/50">
-                <Info className="h-4 w-4" />
-                <AlertTitle className="text-sm font-semibold">時間の入力</AlertTitle>
-                <AlertDescription className="text-xs text-muted-foreground">実績の所要時間を分析するため、正確な入力にご協力ください。</AlertDescription>
-              </Alert>
-            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2"><Label>利用者</Label><Input value={userName} disabled className="bg-muted cursor-not-allowed" /></div>
@@ -137,7 +149,10 @@ export function EditRecordForm({ initialRecord, userName, staffList, activityTyp
                 <Label htmlFor="staff_id">担当スタッフ</Label>
                 <Select value={formData.staff_id || ""} onValueChange={(v) => setFormData({ ...formData, staff_id: v })}>
                   <SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger>
-                  <SelectContent>{staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    <SelectItem value="none">未割り当て</SelectItem>
+                    {staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="md:col-span-2 space-y-2">
@@ -156,9 +171,7 @@ export function EditRecordForm({ initialRecord, userName, staffList, activityTyp
 
             <div className="flex justify-end gap-4">
               <Link href={`/user/${formData.user_id}`}><Button type="button" variant="outline">キャンセル</Button></Link>
-              <Button type="submit" disabled={saving} className="min-w-[120px]">
-                <Save className="h-4 w-4 mr-2" /> {saving ? "更新中..." : "更新して保存"}
-              </Button>
+              <Button type="submit" disabled={saving} className="min-w-[120px]"><Save className="h-4 w-4 mr-2" /> {saving ? "更新中..." : "更新して保存"}</Button>
             </div>
           </form>
         </CardContent>

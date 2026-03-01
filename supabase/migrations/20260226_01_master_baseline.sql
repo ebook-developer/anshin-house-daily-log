@@ -39,18 +39,24 @@ CREATE TABLE public.activity_types (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 5. 活動記録テーブル (実績とタスクのハイブリッド)
+-- 5. 活動記録テーブルの定義変更
 CREATE TABLE public.activity_records (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  staff_id UUID REFERENCES public.staff(id), -- 担当者未割当(NULL)を許可
+  staff_id UUID REFERENCES public.staff(id),
   activity_type_id UUID NOT NULL REFERENCES public.activity_types(id),
   activity_date DATE NOT NULL,
-  start_time TIME, -- 実績用：開始時間
-  end_time TIME,   -- 実績用：終了時間
-  task_time TIME,  -- タスク用：希望時間
-  content TEXT,    -- 内容（NULL許容）
-  is_completed BOOLEAN DEFAULT true, -- true=実績, false=タスク
+  
+  -- 旧カラム：将来的な詳細記録の可能性のためNULL許容で残すが、UIからは廃止
+  start_time TIME,
+  end_time TIME,
+  
+  -- 【新設】現場ファーストの分数入力（30分、60分など数値を直接保持）
+  duration_minutes INTEGER DEFAULT 0,
+  
+  task_time TIME, -- タスク用の希望時間は維持
+  content TEXT,
+  is_completed BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -86,23 +92,20 @@ CREATE POLICY "Enable all for authenticated users" ON public.users FOR ALL USING
 CREATE POLICY "Enable all for authenticated users" ON public.activity_types FOR ALL USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Enable all for authenticated users" ON public.activity_records FOR ALL USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
 
--- 9. 【パフォーマンス最適化】ダッシュボード用 View
--- これによりアプリ側のN+1クエリ問題を解決し、爆速な一覧表示を実現します
-CREATE VIEW public.user_with_last_activity AS
+-- 9. 【Viewの更新】集計時に duration_minutes をそのまま使えるようにする
+-- （Viewの構造は変わりませんが、内部で不整合が起きないよう再作成します）
+CREATE OR REPLACE VIEW public.user_with_last_activity AS
 SELECT 
-  u.id,
-  u.name,
-  u.master_uid,
-  u.is_active,
+  u.id, u.name, u.master_uid, u.is_active,
   ar.activity_date AS last_activity_date,
   s.name AS last_activity_staff_name,
   COALESCE(CURRENT_DATE - ar.activity_date, 999) AS days_elapsed
-FROM users u
+FROM public.users u
 LEFT JOIN LATERAL (
   SELECT activity_date, staff_id 
-  FROM activity_records 
+  FROM public.activity_records 
   WHERE user_id = u.id AND is_completed = true
   ORDER BY activity_date DESC, created_at DESC
   LIMIT 1
 ) ar ON true
-LEFT JOIN staff s ON s.id = ar.staff_id;
+LEFT JOIN public.staff s ON s.id = ar.staff_id;
