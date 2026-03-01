@@ -1,4 +1,4 @@
-import { parse, differenceInMinutes} from "date-fns"
+import { parse, differenceInMinutes } from "date-fns"
 
 /**
  * 2つの時刻文字列 (HH:mm) から所要時間（分）を計算する

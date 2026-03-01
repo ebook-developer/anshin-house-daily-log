@@ -11,13 +11,25 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
   const { id: userId } = await params // Next.js 16 の非同期 params 解決
 
   // 【最高峰の並列フェッチ】
+  // duration_minutes を取得対象に追加し、整合性を確保します。
   const [
     { data: user, error: userError },
     { data: activitiesData }
   ] = await Promise.all([
     supabase.from("users").select("id, name, master_uid").eq("id", userId).single(),
     supabase.from("activity_records")
-      .select(`id, activity_date, start_time, end_time, task_time, content, is_completed, staff:staff_id (name), activity_types:activity_type_id (name)`)
+      .select(`
+        id, 
+        activity_date, 
+        start_time, 
+        end_time, 
+        duration_minutes, 
+        task_time, 
+        content, 
+        is_completed, 
+        staff:staff_id (name), 
+        activity_types:activity_type_id (name)
+      `)
       .eq("user_id", userId)
       .order("activity_date", { ascending: false })
       .order("start_time", { ascending: false })
@@ -28,10 +40,11 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
   }
 
   // クライアントコンポーネントに必要なデータを渡す
-  // ネストされた staff や activity_types の情報をフラットに整形してから渡すのがプロの作法です
+  // duration_minutes を含めた最新の形式にマッピングします
   const formattedActivities = (activitiesData || []).map((record) => ({
     id: record.id,
     activity_date: record.activity_date,
+    duration_minutes: record.duration_minutes, // 【追加】分数データを直接渡す
     start_time: record.start_time,
     end_time: record.end_time,
     task_time: record.task_time,
