@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // BFF移行済みActionをインポート
 import { getMasterUsersAction, type MasterUser } from "@/features/master-sync/actions"
@@ -29,7 +29,7 @@ type FormMode = "record" | "task";
 export default function RecordPage() {
   const supabase = createClient()
   const router = useRouter()
-  
+
   const [staff, setStaff] = useState<Staff[]>([])
   const [masterUsers, setMasterUsers] = useState<MasterUser[]>([])
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([])
@@ -88,24 +88,24 @@ export default function RecordPage() {
       const selectedMasterUser = masterUsers.find(u => u.uid === formData.master_user_uid)
       const { data: userInLog, error: upsertError } = await supabase
         .from('users')
-        .upsert({ 
-          master_uid: formData.master_user_uid, 
-          name: selectedMasterUser?.name || '不明な利用者' 
+        .upsert({
+          master_uid: formData.master_user_uid,
+          name: selectedMasterUser?.name || '不明な利用者'
         }, { onConflict: 'master_uid' })
         .select().single()
 
       if (upsertError) throw upsertError
       if (!userInLog) throw new Error("利用者情報の同期に失敗しました。")
-      
+
       const { error: recordError } = await supabase.from("activity_records").insert([{
         user_id: userInLog.id,
-        staff_id: formData.staff_id || null, 
+        staff_id: formData.staff_id || null,
         activity_type_id: formData.activity_type_id,
         activity_date: formData.activity_date,
         duration_minutes: formMode === "record" ? formData.duration_minutes : null,
         task_time: formMode === "task" ? (formData.task_time || null) : null,
         content: formData.content,
-        is_completed: formMode === "record", 
+        is_completed: formMode === "record",
       }])
 
       if (recordError) throw recordError
@@ -154,36 +154,37 @@ export default function RecordPage() {
         <CardHeader className="space-y-4">
           <div className="space-y-2">
             <Label className="text-base font-semibold">記録の種類を選択</Label>
-            <ToggleGroup 
-              type="single" 
-              value={formMode} 
-              onValueChange={(value: FormMode) => value && setFormMode(value)} 
+            <ToggleGroup
+              type="single"
+              value={formMode}
+              onValueChange={(value: FormMode) => value && setFormMode(value)}
               className="grid grid-cols-2 h-auto gap-4"
             >
               <ToggleGroupItem value="record" className="flex flex-col items-center justify-center h-24 text-sm gap-2 data-[state=on]:bg-blue-50 data-[state=on]:text-blue-700 data-[state=on]:border-blue-200 border">
-                <ClipboardCheck className="h-6 w-6"/><span className="font-bold">活動の記録</span><span className="text-xs text-muted-foreground hidden sm:inline">実施済みの支援を記録</span>
+                <ClipboardCheck className="h-6 w-6" /><span className="font-bold">活動の記録</span><span className="text-xs text-muted-foreground hidden sm:inline">実施済みの支援を記録</span>
               </ToggleGroupItem>
               <ToggleGroupItem value="task" className="flex flex-col items-center justify-center h-24 text-sm gap-2 data-[state=on]:bg-amber-50 data-[state=on]:text-amber-700 data-[state=on]:border-amber-200 border">
-                <ClipboardPlus className="h-6 w-6"/><span className="font-bold">タスクの登録</span><span className="text-xs text-muted-foreground hidden sm:inline">未来の予定を登録</span>
+                <ClipboardPlus className="h-6 w-6" /><span className="font-bold">タスクの登録</span><span className="text-xs text-muted-foreground hidden sm:inline">未来の予定を登録</span>
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
         </CardHeader>
-        
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="activity_date">{formMode === 'record' ? '対応日 *' : '対応希望日 *'}</Label>
-                <Input id="activity_date" type="date" value={formData.activity_date} onChange={(e) => setFormData({ ...formData, activity_date: e.target.value })} required/>
+                <Input id="activity_date" type="date" value={formData.activity_date} onChange={(e) => setFormData({ ...formData, activity_date: e.target.value })} required />
               </div>
-              
+
               {formMode === "record" ? (
                 <div className="space-y-2">
                   <Label htmlFor="duration_minutes">活動時間 (目安) *</Label>
                   <Select value={String(formData.duration_minutes)} onValueChange={(val) => setFormData({ ...formData, duration_minutes: Number(val) })}>
                     <SelectTrigger id="duration_minutes"><SelectValue placeholder="時間を選択" /></SelectTrigger>
-                    <SelectContent>
+                    {/* position="popper" で見切れ防止 */}
+                    <SelectContent position="popper" sideOffset={5} className="max-h-[300px]">
                       <SelectGroup>
                         <SelectLabel>短時間</SelectLabel>
                         <SelectItem value="5">5分</SelectItem>
@@ -214,7 +215,7 @@ export default function RecordPage() {
               ) : (
                 <div className="space-y-2">
                   <Label htmlFor="task_time">希望時間</Label>
-                  <Input id="task_time" type="time" value={formData.task_time} onChange={(e) => setFormData({ ...formData, task_time: e.target.value })}/>
+                  <Input id="task_time" type="time" value={formData.task_time} onChange={(e) => setFormData({ ...formData, task_time: e.target.value })} />
                 </div>
               )}
             </div>
@@ -222,13 +223,12 @@ export default function RecordPage() {
             {formMode === 'record' && (
               <Alert className="bg-muted/50 border-none shadow-none">
                 <Info className="h-4 w-4" />
-                <AlertTitle className="text-sm font-bold">現場ファーストの入力</AlertTitle>
                 <AlertDescription className="text-xs text-muted-foreground">
-                  移動時間は含まず、実支援時間の目安を選択してください。正確な開始・終了時間の記憶は不要です。
+                  移動時間は含まず、実支援時間の目安を選択してください。
                 </AlertDescription>
               </Alert>
             )}
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="staff_id">{formMode === 'record' ? '担当スタッフ *' : '担当スタッフ (後で割当可)'}</Label>
@@ -254,7 +254,7 @@ export default function RecordPage() {
                         <CommandGroup>
                           {masterUsers.map((user) => (
                             <CommandItem key={user.uid} value={user.name} onSelect={() => { setFormData({ ...formData, master_user_uid: user.uid }); setPopoverOpen(false); }}>
-                              <Check className={cn("mr-2 h-4 w-4", formData.master_user_uid === user.uid ? "opacity-100" : "opacity-0")}/>{user.name}
+                              <Check className={cn("mr-2 h-4 w-4", formData.master_user_uid === user.uid ? "opacity-100" : "opacity-0")} />{user.name}
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -271,12 +271,12 @@ export default function RecordPage() {
                 </Select>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="content">{formMode === 'record' ? '活動内容' : 'タスクの詳細内容'}</Label>
-              <Textarea id="content" placeholder={formMode === 'record' ? "具体的な支援内容や気づきを入力してください" : "依頼されたタスクの具体的な内容を入力してください"} value={formData.content || ""} onChange={(e) => setFormData({ ...formData, content: e.target.value })} rows={5}/>
+              <Textarea id="content" placeholder={formMode === 'record' ? "具体的な支援内容や気づきを入力してください" : "依頼されたタスクの具体的な内容を入力してください"} value={formData.content || ""} onChange={(e) => setFormData({ ...formData, content: e.target.value })} rows={5} />
             </div>
-            
+
             <div className="flex justify-end space-x-4 pt-4">
               <Link href="/"><Button type="button" variant="outline">キャンセル</Button></Link>
               <Button type="submit" disabled={saving} className="min-w-[120px]"><Save className="h-4 w-4 mr-2" />{saving ? "保存中..." : "保存"}</Button>
