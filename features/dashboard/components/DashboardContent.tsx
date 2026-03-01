@@ -62,7 +62,7 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
   const [users, setUsers] = useState<UserWithActivity[]>(initialUsers)
   const [uncompletedTasks, setUncompletedTasks] = useState(initialTasks)
   const [selectedStaffId, setSelectedStaffId] = useState<string>("all")
-  const [analyticsTimeRange, setAnalyticsTimeRange] = useState<'this_month' | 'last_month' | 'last_3_months'>('this_month')
+  const [analyticsTimeRange, setAnalyticsTimeRange] = useState<'this_month' | 'last_month' | 'last_3_months'| 'all_time'>('this_month')
 
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false)
   const [targetTaskId, setTargetTaskId] = useState<string | null>(null)
@@ -77,16 +77,44 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
 
   const overdueCount = useMemo(() => users.filter(u => (u.days_elapsed ?? 0) > 90).length, [users])
 
-  // 2. 分析データ計算
+// 2. 分析データ計算
   const staffActivityData = useMemo(() => {
-    const today = new Date()
-    let startDate: Date
-    if (analyticsTimeRange === 'last_month') startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-    else if (analyticsTimeRange === 'last_3_months') startDate = new Date(today.getFullYear(), today.getMonth() - 2, 1)
-    else startDate = new Date(today.getFullYear(), today.getMonth(), 1)
+    let filtered = allActivityHistory
 
-    const filtered = allActivityHistory.filter(h => new Date(h.activity_date) >= startDate)
-    
+    // 'all_time' 以外の場合のみ、日付フィルタリングを行う
+    if (analyticsTimeRange !== 'all_time') {
+      const today = new Date()
+      // 今日の日付の「年」と「月」を取得
+      const currentYear = today.getFullYear()
+      const currentMonth = today.getMonth() // 0=1月, 2=3月
+
+      let startDate: Date
+      let endDate: Date | null = null // nullの場合は「現在まで（上限なし）」とする
+
+      if (analyticsTimeRange === 'last_month') {
+        // 先月: 先月の1日 ～ 今月の1日未満（つまり先月末まで）
+        startDate = new Date(currentYear, currentMonth - 1, 1)
+        endDate = new Date(currentYear, currentMonth, 1)
+      } else if (analyticsTimeRange === 'last_3_months') {
+        // 過去3ヶ月: 2ヶ月前の1日 ～ 現在
+        startDate = new Date(currentYear, currentMonth - 2, 1)
+      } else {
+        // 今月 (default): 今月の1日 ～ 現在
+        startDate = new Date(currentYear, currentMonth, 1)
+      }
+
+      // フィルタリング実行
+      filtered = allActivityHistory.filter(h => {
+        const targetDate = new Date(h.activity_date)
+        // 開始日より前なら除外
+        if (targetDate < startDate) return false
+        // 終了日が設定されており、かつ終了日以降なら除外（endDateを含まない）
+        if (endDate && targetDate >= endDate) return false
+        
+        return true
+      })
+    }
+    // ▲▲▲ 修正ここまで ▲▲▲
     const staffMetrics: Record<string, { count: number; totalMinutes: number }> = {}
     const typeMetrics: Record<string, { count: number; totalMinutes: number; color: string }> = {}
 
@@ -305,9 +333,10 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
               分析対象: {staffActivityData.count} 件の実績
             </h2>
             <div className="flex gap-2">
-              {(['this_month', 'last_month', 'last_3_months'] as const).map(range => (
+              {(['this_month', 'last_month', 'last_3_months', 'all_time'] as const).map(range => (
                 <Button key={range} variant={analyticsTimeRange === range ? 'default' : 'outline'} size="sm" className="h-8 text-xs font-bold" onClick={() => setAnalyticsTimeRange(range)}>
-                  {range === 'this_month' ? '今月' : range === 'last_month' ? '先月' : '過去3ヶ月'}
+                  {/* ▼▼▼ ラベルの分岐を追加 ▼▼▼ */}
+                  {range === 'this_month' ? '今月' : range === 'last_month' ? '先月' : range === 'last_3_months' ? '過去3ヶ月' : '全期間'}
                 </Button>
               ))}
             </div>
