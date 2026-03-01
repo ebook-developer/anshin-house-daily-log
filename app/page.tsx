@@ -25,7 +25,7 @@ export default async function DashboardPage() {
       .order('activity_date', { ascending: true }),
     supabase.from("staff").select("id, name").eq("is_active", true).order("name"),
     supabase.from("activity_records")
-      .select(`activity_date, start_time, end_time, staff ( name ), activity_types ( name, color )`)
+      .select(`activity_date, start_time, end_time, duration_minutes, staff ( name ), activity_types ( name, color )`)
       .eq('is_completed', true) // 実績のみ
   ])
 
