@@ -9,20 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { Label } from "@/components/ui/label"
 import { Clock, AlertTriangle, Users, BarChart as BarChartIcon, PieChart as PieChartIcon, Hourglass, ListTodo, CheckCircle2, Calendar, CalendarDays } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import MiniCalendar from "@/components/MiniCalendar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Bar, BarChart, Pie, PieChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, Cell, CartesianGrid } from "recharts"
 import type { Database } from "@/lib/database.types"
 import { cn } from "@/lib/utils"
-// ダイアログ関連のインポートを完全補完
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 
 type UserWithActivity = Database['public']['Views']['user_with_last_activity']['Row']
 type UncompletedTask = any
@@ -34,8 +26,18 @@ interface Props {
   allActivityHistory: any[]
 }
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+
 export function DashboardContent({ initialUsers, initialTasks, staffList, allActivityHistory }: Props) {
   const supabase = createClient()
+  const router = useRouter()
   
   const [isMounted, setIsMounted] = useState(false)
   const [activeTab, setActiveTab] = useState("care_status")
@@ -45,7 +47,7 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
     return () => cancelAnimationFrame(handle)
   }, [])
 
-  // 状態管理
+  const [users, setUsers] = useState<UserWithActivity[]>(initialUsers)
   const [uncompletedTasks, setUncompletedTasks] = useState(initialTasks)
   const [selectedStaffId, setSelectedStaffId] = useState<string>("all")
   const [analyticsTimeRange, setAnalyticsTimeRange] = useState<'this_month' | 'last_month' | 'last_3_months'>('this_month')
@@ -54,16 +56,16 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
   const [targetTaskId, setTargetTaskId] = useState<string | null>(null)
   const [tempDuration, setTempDuration] = useState(30)
 
-  // 1. フィルタリング
+  // 1. フィルタリングロジック
   const filteredUsers = useMemo(() => {
-    if (selectedStaffId === "all") return initialUsers
+    if (selectedStaffId === "all") return users
     const staff = staffList.find(s => s.id === selectedStaffId)
-    return initialUsers.filter(u => u.last_activity_staff_name === staff?.name)
-  }, [selectedStaffId, initialUsers, staffList])
+    return users.filter(u => u.last_activity_staff_name === staff?.name)
+  }, [selectedStaffId, users, staffList])
 
-  const overdueCount = useMemo(() => initialUsers.filter(u => (u.days_elapsed ?? 0) > 90).length, [initialUsers])
+  const overdueCount = useMemo(() => users.filter(u => (u.days_elapsed ?? 0) > 90).length, [users])
 
-  // 2. 分析データ計算
+  // 2. 分析データ計算 (4つのグラフに対応)
   const staffActivityData = useMemo(() => {
     const today = new Date()
     let startDate: Date
@@ -91,9 +93,10 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
     })
 
     return {
+      count: filtered.length,
       staff: Object.entries(staffMetrics).map(([name, data]) => ({ name, "活動件数": data.count, "合計時間 (分)": Math.round(data.totalMinutes) })),
       type: Object.entries(typeMetrics).map(([name, data]) => ({ name, value: data.count, color: data.color })),
-      typeTime: Object.entries(typeMetrics).map(([name, data]) => ({ name, "合計時間 (分)": Math.round(data.totalMinutes), color: data.color }))
+      typeTime: Object.entries(typeMetrics).map(([name, data]) => ({ name, value: Math.round(data.totalMinutes), color: data.color }))
     }
   }, [analyticsTimeRange, allActivityHistory])
 
@@ -111,6 +114,9 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
 
   const executeCompleteTask = async () => {
     if (!targetTaskId) return
+    const taskToComplete = uncompletedTasks.find(t => t.id === targetTaskId)
+    if (!taskToComplete) return
+
     const { error } = await supabase.from('activity_records').update({ 
       is_completed: true,
       duration_minutes: tempDuration,
@@ -119,9 +125,15 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
     }).eq('id', targetTaskId)
 
     if (!error) {
-      setUncompletedTasks(tasks => tasks.filter(t => t.id !== targetTaskId))
+      setUncompletedTasks(prev => prev.filter(t => t.id !== targetTaskId))
+      const today = new Date(); today.setHours(0,0,0,0)
+      const activityDate = new Date(taskToComplete.activity_date)
+      const diffDays = Math.max(0, Math.floor((today.getTime() - activityDate.getTime()) / (1000 * 60 * 60 * 24)))
+
+      setUsers(prev => prev.map(u => u.id === taskToComplete.user_id ? { ...u, last_activity_date: taskToComplete.activity_date, days_elapsed: diffDays, last_activity_staff_name: staffList.find(s => s.id === taskToComplete.staff_id)?.name || u.last_activity_staff_name } : u))
       setIsCompleteDialogOpen(false)
       setTargetTaskId(null)
+      router.refresh()
     }
   }
 
@@ -140,7 +152,10 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
         <div className="lg:col-span-2">
           <Card className="h-full border-primary/10 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/20 py-4">
-              <CardTitle className="flex items-center text-lg font-bold text-primary"><ListTodo className="h-5 w-5 mr-3" /><span>チームの未完了タスク</span></CardTitle>
+              <CardTitle className="flex items-center text-lg font-bold text-primary">
+                <ListTodo className="h-5 w-5 mr-3" />
+                <span>チームの未完了タスク</span>
+              </CardTitle>
               <Badge variant="secondary" className="px-3 py-1 text-sm font-bold">{uncompletedTasks.length}件</Badge>
             </CardHeader>
             <CardContent className="pt-6">
@@ -165,7 +180,7 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
                             <SelectTrigger className="w-full sm:w-40 h-9 font-medium"><SelectValue placeholder="担当者を割当..." /></SelectTrigger>
                             <SelectContent>{staffList.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
                           </Select>
-                          <Button size="icon" className="h-9 w-9 bg-green-600 hover:bg-green-700" onClick={() => requestCompleteTask(task.id)}><CheckCircle2 className="h-5 w-5 text-white" /></Button>
+                          <Button size="icon" className="h-9 w-9 bg-green-600 hover:bg-green-700 shadow-sm" onClick={() => requestCompleteTask(task.id)}><CheckCircle2 className="h-5 w-5 text-white" /></Button>
                         </div>
                       </div>
                     )
@@ -217,19 +232,11 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
                             {getDaysElapsedBadge(user.days_elapsed ?? 0, (user.days_elapsed ?? 0) > 90)}
                             {(user.days_elapsed ?? 0) > 90 && <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />}
                           </div>
-                          <p className="text-xs text-muted-foreground font-bold">
-                            最終: {formatDate(user.last_activity_date)} ({user.last_activity_staff_name || "記録なし"})
-                          </p>
-                          {nextTask && (
-                            <div className="flex items-center text-[10px] text-blue-700 pt-1 font-bold">
-                              <CalendarDays className="h-3 w-3 mr-1.5" />次回予定: {formatDate(nextTask.activity_date)}
-                            </div>
-                          )}
+                          <p className="text-xs text-muted-foreground font-bold">最終: {formatDate(user.last_activity_date)} ({user.last_activity_staff_name || "記録なし"})</p>
+                          {nextTask && <div className="flex items-center text-[10px] text-blue-700 pt-1 font-bold"><CalendarDays className="h-3 w-3 mr-1.5" />次回予定: {formatDate(nextTask.activity_date)}</div>}
                         </div>
                         <div className="text-right ml-4">
-                          <div className={cn("text-2xl font-black tabular-nums", (user.days_elapsed ?? 0) > 90 ? "text-red-600" : "text-primary/70")}>
-                            {user.days_elapsed === 999 ? "---" : `${user.days_elapsed}日`}
-                          </div>
+                          <div className={cn("text-2xl font-black tabular-nums", (user.days_elapsed ?? 0) > 90 ? "text-red-600" : "text-primary/70")}>{user.days_elapsed === 999 ? "---" : `${user.days_elapsed}日`}</div>
                           <p className="text-[10px] font-bold text-muted-foreground uppercase leading-none">Elapsed</p>
                         </div>
                       </div>
@@ -243,7 +250,7 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
 
         <TabsContent value="analytics" className="mt-6 space-y-8">
           <div className="flex justify-between items-center bg-muted/30 p-4 rounded-lg border">
-            <h2 className="text-sm font-bold text-primary">集計期間</h2>
+            <h2 className="text-sm font-bold text-primary italic text-blue-800">分析対象: {staffActivityData.count} 件</h2>
             <div className="flex gap-2">
               {(['this_month', 'last_month', 'last_3_months'] as const).map(range => (
                 <Button key={range} variant={analyticsTimeRange === range ? 'default' : 'outline'} size="sm" className="h-8 text-xs font-bold" onClick={() => setAnalyticsTimeRange(range)}>
@@ -252,53 +259,37 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
               ))}
             </div>
           </div>
-          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <Card>
-              <CardHeader className="bg-muted/10 border-b py-3 px-4"><CardTitle className="text-sm font-bold flex items-center"><BarChartIcon className="h-4 w-4 mr-2" />スタッフ別 活動件数</CardTitle></CardHeader>
+              <CardHeader className="bg-muted/10 border-b py-3 px-4"><CardTitle className="text-sm font-bold flex items-center"><BarChartIcon className="h-4 w-4 mr-2" />Staff Activity Count</CardTitle></CardHeader>
               <CardContent className="h-[300px] pt-6">
                 {isMounted && staffActivityData.staff.length > 0 ? (
                   <ResponsiveContainer key={`bar-count-${activeTab}`} width="100%" height="100%">
-                    <BarChart data={staffActivityData.staff}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" fontSize={11} fontWeight="bold" />
-                      <YAxis fontSize={11} />
-                      <Tooltip />
-                      <Bar dataKey="活動件数" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                    </BarChart>
+                    <BarChart data={staffActivityData.staff} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" fontSize={11} fontWeight="bold" /><YAxis fontSize={11} /><Tooltip /><Bar dataKey="活動件数" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} barSize={40} /></BarChart>
                   </ResponsiveContainer>
                 ) : ( <p className="flex items-center justify-center h-full text-sm text-muted-foreground italic">実績データがありません</p> )}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="bg-muted/10 border-b py-3 px-4"><CardTitle className="text-sm font-bold flex items-center"><Hourglass className="h-4 w-4 mr-2" />スタッフ別 合計時間(分)</CardTitle></CardHeader>
-              <CardContent className="h-[300px] pt-6">
-                {isMounted && staffActivityData.staff.length > 0 ? (
-                  <ResponsiveContainer key={`bar-time-${activeTab}`} width="100%" height="100%">
-                    <BarChart data={staffActivityData.staff}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" fontSize={11} fontWeight="bold" />
-                      <YAxis fontSize={11} />
-                      <Tooltip />
-                      <Bar dataKey="合計時間 (分)" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : ( <p className="flex items-center justify-center h-full text-sm text-muted-foreground italic">実績データがありません</p> )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="bg-muted/10 border-b py-3 px-4"><CardTitle className="text-sm font-bold flex items-center"><PieChartIcon className="h-4 w-4 mr-2" />活動種別 割合(件数)</CardTitle></CardHeader>
+              <CardHeader className="bg-muted/10 border-b py-3 px-4"><CardTitle className="text-sm font-bold flex items-center"><PieChartIcon className="h-4 w-4 mr-2" />Activity Type Ratio</CardTitle></CardHeader>
               <CardContent className="h-[300px] pt-6">
                 {isMounted && staffActivityData.type.length > 0 ? (
                   <ResponsiveContainer key={`pie-count-${activeTab}`} width="100%" height="100%">
                     <PieChart>
-                      <Pie data={staffActivityData.type} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                      <Pie 
+                        data={staffActivityData.type} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="50%" 
+                        cy="50%" 
+                        outerRadius={80} 
+                        // 【修正】percent の undefined チェックを追加して型エラーを解消
+                        label={({name, percent}) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                      >
                         {staffActivityData.type.map((entry, index) => ( <Cell key={`cell-${index}`} fill={entry.color} /> ))}
                       </Pie>
-                      <Tooltip />
-                      <Legend verticalAlign="bottom" height={36}/>
+                      <Tooltip /><Legend verticalAlign="bottom" height={36}/>
                     </PieChart>
                   </ResponsiveContainer>
                 ) : ( <p className="flex items-center justify-center h-full text-sm text-muted-foreground italic">実績データがありません</p> )}
@@ -306,16 +297,35 @@ export function DashboardContent({ initialUsers, initialTasks, staffList, allAct
             </Card>
 
             <Card>
-              <CardHeader className="bg-muted/10 border-b py-3 px-4"><CardTitle className="text-sm font-bold flex items-center"><Hourglass className="h-4 w-4 mr-2" />活動種別 割合(時間)</CardTitle></CardHeader>
+              <CardHeader className="bg-muted/10 border-b py-3 px-4"><CardTitle className="text-sm font-bold flex items-center"><Hourglass className="h-4 w-4 mr-2" />Staff Total Time (min)</CardTitle></CardHeader>
+              <CardContent className="h-[300px] pt-6">
+                {isMounted && staffActivityData.staff.length > 0 ? (
+                  <ResponsiveContainer key={`bar-time-${activeTab}`} width="100%" height="100%">
+                    <BarChart data={staffActivityData.staff} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" fontSize={11} fontWeight="bold" /><YAxis fontSize={11} /><Tooltip /><Bar dataKey="合計時間 (分)" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} barSize={40} /></BarChart>
+                  </ResponsiveContainer>
+                ) : ( <p className="flex items-center justify-center h-full text-sm text-muted-foreground italic">実績データがありません</p> )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="bg-muted/10 border-b py-3 px-4"><CardTitle className="text-sm font-bold flex items-center"><Hourglass className="h-4 w-4 mr-2" />Activity Type Time Ratio</CardTitle></CardHeader>
               <CardContent className="h-[300px] pt-6">
                 {isMounted && staffActivityData.typeTime.length > 0 ? (
                   <ResponsiveContainer key={`pie-time-${activeTab}`} width="100%" height="100%">
                     <PieChart>
-                      <Pie data={staffActivityData.typeTime} dataKey="合計時間 (分)" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                      <Pie 
+                        data={staffActivityData.typeTime} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="50%" 
+                        cy="50%" 
+                        outerRadius={80} 
+                        // 【修正】percent の undefined チェックを追加して型エラーを解消
+                        label={({name, percent}) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                      >
                         {staffActivityData.typeTime.map((entry, index) => ( <Cell key={`cell-${index}`} fill={entry.color} /> ))}
                       </Pie>
-                      <Tooltip />
-                      <Legend verticalAlign="bottom" height={36}/>
+                      <Tooltip /><Legend verticalAlign="bottom" height={36}/>
                     </PieChart>
                   </ResponsiveContainer>
                 ) : ( <p className="flex items-center justify-center h-full text-sm text-muted-foreground italic">実績データがありません</p> )}

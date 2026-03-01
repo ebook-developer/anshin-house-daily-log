@@ -45,6 +45,7 @@ export type Database = {
           activity_type_id: string
           content: string | null
           created_at: string
+          duration_minutes: number | null
           end_time: string | null
           id: string
           is_completed: boolean | null
@@ -59,6 +60,7 @@ export type Database = {
           activity_type_id: string
           content?: string | null
           created_at?: string
+          duration_minutes?: number | null
           end_time?: string | null
           id?: string
           is_completed?: boolean | null
@@ -73,6 +75,7 @@ export type Database = {
           activity_type_id?: string
           content?: string | null
           created_at?: string
+          duration_minutes?: number | null
           end_time?: string | null
           id?: string
           is_completed?: boolean | null
